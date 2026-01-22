@@ -13,12 +13,17 @@ import (
 	"casino_backend/internal/service/line"
 	"context"
 
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	"github.com/avito-tech/go-transaction-manager/trm/v2"
+	"github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ServiceProvider struct {
+	//TXManager
+	txManager trm.Manager
 	// Database
 	pgConfig config.PGConfig
 	dbClient *pgxpool.Pool
@@ -65,6 +70,20 @@ func (sp *ServiceProvider) DBClient(ctx context.Context) *pgxpool.Pool {
 		sp.dbClient = dbc
 	}
 	return sp.dbClient
+}
+
+func (sp *ServiceProvider) TXManager(ctx context.Context) trm.Manager {
+	if sp.txManager == nil {
+		m, err := manager.New(trmpgx.NewDefaultFactory(sp.DBClient(ctx)))
+		if err != nil {
+			panic("failed to create tx manager: " + err.Error())
+			return nil
+		}
+
+		sp.txManager = m
+	}
+
+	return sp.txManager
 }
 
 func (sp *ServiceProvider) LineCfg() config.LineConfig {

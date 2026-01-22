@@ -3,7 +3,6 @@ package repository
 import (
 	"casino_backend/internal/model"
 	"context"
-	"time"
 )
 
 type LineRepository interface {
@@ -25,7 +24,7 @@ type CascadeRepository interface {
 }
 
 type AuthRepository interface {
-	CreateSession(ctx context.Context, userID int, sessionID, refreshToken string, expired time.Duration) error
+	CreateSession(ctx context.Context, session *model.Session) error
 	GetRefreshTokenBySessionID(ctx context.Context, sessionID string) (refreshToken string, err error)
 	DeleteSession(ctx context.Context, sessionID string) error
 }
