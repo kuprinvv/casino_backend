@@ -10,16 +10,17 @@ import (
 	"github.com/google/uuid"
 )
 
-var sessionTTL = time.Now().Add(time.Hour * 24 * 30)
-
-// Register TODO Егор сделай dto для возврващаемых значений
-func (s *serv) Register(ctx context.Context, user *model.User) (accessToken string, sessionID string, _ error) {
+func (s *serv) Register(ctx context.Context, user *model.User) (*model.AuthData, error) {
 	// Хэширование пароля пользователя
 	passwordHash, err := pass.HashPassword(user.Password)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	user.Password = passwordHash
+
+	var accessToken string
+	var refreshToken string
+	var sessionID string
 
 	// Начало транзакциии
 	err = s.txManager.Do(ctx, func(ctx context.Context) error {
@@ -31,7 +32,7 @@ func (s *serv) Register(ctx context.Context, user *model.User) (accessToken stri
 		// 2. Генерация sessionID
 		sessionID = generateSessionID()
 		// 3. Генерация refresh токена
-		refreshToken, err := token.GenerateRefreshToken()
+		refreshToken, err = token.GenerateRefreshToken()
 		if err != nil {
 			return err
 		}
@@ -49,14 +50,23 @@ func (s *serv) Register(ctx context.Context, user *model.User) (accessToken stri
 		}
 
 		// 4. Создать access токен
-		AccessToken, err := token.GenerateAccessToken(user, []byte("fsfsd"), time.Minute*15)
+		// TODO: Вынести секретный ключ в конфиг
+		accessToken, err = token.GenerateAccessToken(user, []byte("fsfsd"), time.Minute*15)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	})
-	return "", "", err
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.AuthData{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		SessionID:    sessionID,
+	}, nil
 }
 
 func generateSessionID() string {

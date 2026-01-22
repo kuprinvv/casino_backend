@@ -20,7 +20,7 @@ type CascadeService interface {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, user *model.User) (accessToken string, sessionID string, err error)
+	Register(ctx context.Context, user *model.User) (*model.AuthData, error)
 	Login(ctx context.Context, login, password string) (accessToken string, sessionID string, err error)
 	Refresh(ctx context.Context, sessionID string) (newAccessToken string, err error)
 	Logout(ctx context.Context, sessionID string) error

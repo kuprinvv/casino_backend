@@ -8,3 +8,9 @@ type Session struct {
 	RefreshToken string
 	ExpiresAt    time.Time
 }
+
+type AuthData struct {
+	AccessToken  string
+	RefreshToken string
+	SessionID    string
+}

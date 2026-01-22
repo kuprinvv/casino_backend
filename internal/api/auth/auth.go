@@ -5,6 +5,7 @@ import (
 	"casino_backend/internal/converter"
 	"casino_backend/internal/service"
 	"casino_backend/pkg/req"
+	"casino_backend/pkg/resp"
 	"log"
 	"net/http"
 )
@@ -30,7 +31,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, sessionID, err := h.serv.Register(
+	data, err := h.serv.Register(
 		r.Context(),
 		converter.RegisterRequestToUserModel(&requestBody),
 	)
@@ -40,11 +41,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionIDCookie(w, sessionID)
+	setSessionIDCookie(w, data.SessionID)
 
-	setAccessTokenCookie(w, accessToken)
+	setRefreshTokenCookie(w, data.RefreshToken)
 
-	w.WriteHeader(http.StatusCreated)
+	resp.WriteJSONResponse(w, http.StatusCreated, map[string]interface{}{
+		"access_token": data.AccessToken,
+	})
 }
 
 // Login создаёт сессию и возвращает access_token и session_id через cookies
@@ -67,7 +70,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	setSessionIDCookie(w, sessionID)
 
-	setAccessTokenCookie(w, accessToken)
+	setRefreshTokenCookie(w, accessToken)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -89,7 +92,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setAccessTokenCookie(w, accessToken)
+	setRefreshTokenCookie(w, accessToken)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -112,20 +115,34 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deleteSessionIDCookie(w)
+	deleteRefreshTokenCookie(w)
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
-// setAccessTokenCookie устанавливает cookie с access_token
-func setAccessTokenCookie(w http.ResponseWriter, accessToken string) {
+// setRefreshTokenCookie устанавливает cookie с refresh_token
+func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    accessToken,
-		Path:     "/",
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/refresh",
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   15 * 60, // 15 минут
+		MaxAge:   60 * 60 * 24 * 30, // 30 дней
+	})
+}
+
+// deleteRefreshTokenCookie удаляет cookie с session_id
+func deleteRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -145,7 +162,7 @@ func setSessionIDCookie(w http.ResponseWriter, sessionID string) {
 // deleteSessionIDCookie удаляет cookie с session_id
 func deleteSessionIDCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
+		Name:     "session_id",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
