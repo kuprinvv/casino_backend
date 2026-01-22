@@ -3,6 +3,7 @@ package auth
 import (
 	dto "casino_backend/internal/api/dto/auth"
 	"casino_backend/internal/converter"
+	"casino_backend/internal/model"
 	"casino_backend/internal/service"
 	"casino_backend/pkg/req"
 	"casino_backend/pkg/resp"
@@ -28,6 +29,7 @@ func NewHandler(deps HandlerDeps) *Handler {
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := req.Decode[dto.RegisterRequest](r.Body)
 	if err != nil {
+		log.Printf("register: decode request error: %v", err)
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
@@ -51,17 +53,22 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Login создаёт сессию и возвращает access_token и session_id через cookies
+// Login создаёт сессию и возвращает access_token в теле ответа (HTTP 200).
+// `refresh_token` и `session_id` устанавливаются через cookie.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := req.Decode[dto.LoginRequest](r.Body)
 	if err != nil {
+		log.Printf("login: decode request error: %v", err)
+		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	accessToken, sessionID, err := h.serv.Login(
+	data, err := h.serv.Login(
 		r.Context(),
-		requestBody.Login,
-		requestBody.Password,
+		&model.User{ // TODO вынести в конвертер
+			Login:    requestBody.Login,
+			Password: requestBody.Password,
+		},
 	)
 	if err != nil {
 		log.Println("Login error:", err)
@@ -69,14 +76,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionIDCookie(w, sessionID)
+	setSessionIDCookie(w, data.SessionID)
 
-	setRefreshTokenCookie(w, accessToken)
+	setRefreshTokenCookie(w, data.RefreshToken)
 
-	w.WriteHeader(http.StatusOK)
+	resp.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"access_token": data.AccessToken,
+	})
 }
 
-// Refresh обновляет access_token по session_id
+// Refresh обновляет access_token по session_id.
+// Ожидает cookie `session_id`. Вызывает сервис обновления и устанавливает обновлённый
+// `refresh_token` через cookie. Возвращает HTTP 200 без тела.
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("session_id")
 	if err != nil {
@@ -98,7 +109,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Logout закрывает сессию по session_id
+// Logout закрывает сессию по session_id.
+// Ожидает cookie `session_id`. Удаляет `session_id` и `refresh_token` cookie и возвращает HTTP 204.
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("session_id")
 	if err != nil {
