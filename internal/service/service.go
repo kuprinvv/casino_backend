@@ -11,10 +11,8 @@ type LineService interface {
 }
 
 type CascadeService interface {
-	Spin(ctx context.Context, req model.CascadeSpin) (*model.CascadeSpinResult, error)
-	BuyBonus(amount int) error
-	Deposit(amount int) error
-	CheckData() (*model.CascadeData, error)
+	Spin(ctx context.Context, userID int, req model.CascadeSpin) (*model.CascadeSpinResult, error)
+	BuyBonus(ctx context.Context, userID int, amount int) error
 }
 
 type AuthService interface {

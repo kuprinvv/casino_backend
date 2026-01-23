@@ -36,12 +36,12 @@ type cluster struct {
 }
 
 // Spin — основной метод
-func (s *serv) Spin(ctx context.Context, req model.CascadeSpin) (*model.CascadeSpinResult, error) {
+func (s *serv) Spin(ctx context.Context, userID int, req model.CascadeSpin) (*model.CascadeSpinResult, error) {
 	if req.Bet <= 0 || req.Bet%2 != 0 {
 		return nil, errors.New("bet must be positive and even")
 	}
 
-	freeSpins, err := s.repo.GetFreeSpinCount()
+	freeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (s *serv) Spin(ctx context.Context, req model.CascadeSpin) (*model.CascadeS
 	var balance int
 
 	if !isFreeSpin {
-		balance, err = s.repo.GetBalance()
+		balance, err = s.userRepo.GetBalance(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -58,33 +58,33 @@ func (s *serv) Spin(ctx context.Context, req model.CascadeSpin) (*model.CascadeS
 			return nil, errors.New("not enough balance")
 		}
 		balance -= req.Bet
-		if err := s.repo.UpdateBalance(balance); err != nil {
+		if err := s.userRepo.UpdateBalance(ctx, userID, balance); err != nil {
 			return nil, err
 		}
 	} else {
 		freeSpins--
-		if err := s.repo.UpdateFreeSpinCount(freeSpins); err != nil {
+		if err := s.repo.UpdateFreeSpinCount(ctx, userID, freeSpins); err != nil {
 			return nil, err
 		}
 	}
 
-	spinRes, err := s.spinOnce(req.Bet, !isFreeSpin)
+	spinRes, err := s.spinOnce(ctx, userID, req.Bet, !isFreeSpin)
 	if err != nil {
 		return nil, err
 	}
 
 	// Начисление выигрыша
-	balance, err = s.repo.GetBalance()
+	balance, err = s.userRepo.GetBalance(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	balance += spinRes.TotalPayout
-	if err := s.repo.UpdateBalance(balance); err != nil {
+	if err := s.userRepo.UpdateBalance(ctx, userID, balance); err != nil {
 		return nil, err
 	}
 
 	// Начисление фриспинов — уже сделано внутри spinOnce → просто читаем результат
-	finalFreeSpins, err := s.repo.GetFreeSpinCount()
+	finalFreeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,22 +109,28 @@ func (s *serv) Spin(ctx context.Context, req model.CascadeSpin) (*model.CascadeS
 }
 
 // spinOnce полный спин с каскадами
-func (s *serv) spinOnce(bet int, resetMultipliers bool) (*model.CascadeSpinResult, error) {
+func (s *serv) spinOnce(ctx context.Context, userID int, bet int, resetMultipliers bool) (*model.CascadeSpinResult, error) {
 	// Инициализация доски
 	var board [rows][cols]int
 	// hits - сколько раз ячейка участвовала в удалении кластера
 	// mult - множитель клетки (x1, x2, x4, x8, x16...)
 	// Загружаем состояние множителей из репозитория
-	mult, hits := s.repo.GetMultiplierState()
+	mult, hits, err := s.repo.GetMultiplierState(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Если обычный спин, то сбрасываем множители и заново их инициализируем
 	if resetMultipliers {
 		// Обнуляем счетчики и множители в репозитории
-		if err := s.repo.ResetMultiplierState(); err != nil {
+		if err := s.repo.ResetMultiplierState(ctx, userID); err != nil {
 			return nil, err
 		}
 		// Загружаем заново — Reset уже поставил 1 и 0
-		mult, hits = s.repo.GetMultiplierState()
+		mult, hits, err = s.repo.GetMultiplierState(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
 		// Заполняем доску заново
 		s.fillBoard(&board)
 	} else {
@@ -195,7 +201,7 @@ func (s *serv) spinOnce(bet int, resetMultipliers bool) (*model.CascadeSpinResul
 	}
 
 	// Сохраняем обновлённое состояние множителей
-	if err := s.repo.SetMultiplierState(mult, hits); err != nil {
+	if err := s.repo.SetMultiplierState(ctx, userID, mult, hits); err != nil {
 		return nil, err
 	}
 
@@ -205,11 +211,11 @@ func (s *serv) spinOnce(bet int, resetMultipliers bool) (*model.CascadeSpinResul
 		if v, ok := s.cfg.BonusAwards()[scatterCount]; ok {
 			awarded = v
 
-			currentFS, err := s.repo.GetFreeSpinCount()
+			currentFS, err := s.repo.GetFreeSpinCount(ctx, userID)
 			if err != nil {
 				return nil, err
 			}
-			err = s.repo.UpdateFreeSpinCount(currentFS + awarded)
+			err = s.repo.UpdateFreeSpinCount(ctx, userID, currentFS+awarded)
 			if err != nil {
 				return nil, err
 			}
