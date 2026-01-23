@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type LineConfig interface {
 	SymbolWeights() map[string]int
 	WildChance() float64
@@ -20,4 +22,10 @@ type HTTPConfig interface {
 
 type PGConfig interface {
 	DSN() string
+}
+
+type JWTConfig interface {
+	AccessTokenSecretKey() []byte
+	AccessTokenDuration() time.Duration
+	RefreshTokenDuration() time.Duration
 }

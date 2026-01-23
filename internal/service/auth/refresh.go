@@ -5,7 +5,6 @@ import (
 	"casino_backend/pkg/token"
 	"context"
 	"errors"
-	"time"
 )
 
 func (s *serv) Refresh(ctx context.Context, data *model.AuthData) (newAccessToken string, err error) {
@@ -27,7 +26,10 @@ func (s *serv) Refresh(ctx context.Context, data *model.AuthData) (newAccessToke
 	}
 
 	// Генерация нового access токена
-	newAccessToken, err = token.GenerateAccessToken(user, []byte("fsfsd"), time.Minute*15)
+	newAccessToken, err = token.GenerateAccessToken(
+		user,
+		s.jwtConfig.AccessTokenSecretKey(),
+		s.jwtConfig.AccessTokenDuration())
 	if err != nil {
 		return "", err
 	}

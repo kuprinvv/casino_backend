@@ -43,8 +43,10 @@ func (s *serv) Login(ctx context.Context, user *model.User) (*model.AuthData, er
 	}
 
 	// Создать access токен
-	// TODO: Вынести секретный ключ в конфиг
-	accessToken, err := token.GenerateAccessToken(userRepo, []byte("fsfsd"), time.Minute*15)
+	accessToken, err := token.GenerateAccessToken(
+		user,
+		s.jwtConfig.AccessTokenSecretKey(),
+		s.jwtConfig.AccessTokenDuration())
 	if err != nil {
 		return nil, err
 	}

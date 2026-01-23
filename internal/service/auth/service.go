@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"casino_backend/internal/config"
 	"casino_backend/internal/repository"
 
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
@@ -9,6 +10,7 @@ import (
 
 type serv struct {
 	txManager trm.Manager
+	jwtConfig config.JWTConfig
 	userRepo  repository.UserRepository
 	authRepo  repository.AuthRepository
 }
