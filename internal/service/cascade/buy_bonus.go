@@ -21,11 +21,11 @@ func (s *serv) BuyBonus(ctx context.Context, userID int, amount int) error {
 		return errors.New("failed to update balance after bonus buy")
 	}
 
-	if err := s.repo.ResetMultiplierState(ctx, userID); err != nil {
+	if err := s.cascadeRepo.ResetMultiplierState(ctx, userID); err != nil {
 		return errors.New("failed to reset mult state")
 	}
 
-	err = s.repo.UpdateFreeSpinCount(ctx, userID, 10)
+	err = s.cascadeRepo.UpdateFreeSpinCount(ctx, userID, 10)
 	if err != nil {
 		return errors.New("failed to update free spin count after bonus buy")
 	}

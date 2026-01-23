@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var (
+const (
 	table          = "free_spins_count"
 	playerId       = "player_id"
 	freeSpinsCount = "free_spins_count"

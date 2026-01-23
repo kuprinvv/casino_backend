@@ -41,7 +41,7 @@ func (s *serv) Spin(ctx context.Context, userID int, req model.CascadeSpin) (*mo
 		return nil, errors.New("bet must be positive and even")
 	}
 
-	freeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
+	freeSpins, err := s.cascadeRepo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *serv) Spin(ctx context.Context, userID int, req model.CascadeSpin) (*mo
 		}
 	} else {
 		freeSpins--
-		if err := s.repo.UpdateFreeSpinCount(ctx, userID, freeSpins); err != nil {
+		if err := s.cascadeRepo.UpdateFreeSpinCount(ctx, userID, freeSpins); err != nil {
 			return nil, err
 		}
 	}
@@ -84,7 +84,7 @@ func (s *serv) Spin(ctx context.Context, userID int, req model.CascadeSpin) (*mo
 	}
 
 	// Начисление фриспинов — уже сделано внутри spinOnce → просто читаем результат
-	finalFreeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
+	finalFreeSpins, err := s.cascadeRepo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (s *serv) spinOnce(ctx context.Context, userID int, bet int, resetMultiplie
 	// hits - сколько раз ячейка участвовала в удалении кластера
 	// mult - множитель клетки (x1, x2, x4, x8, x16...)
 	// Загружаем состояние множителей из репозитория
-	mult, hits, err := s.repo.GetMultiplierState(ctx, userID)
+	mult, hits, err := s.cascadeRepo.GetMultiplierState(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +123,11 @@ func (s *serv) spinOnce(ctx context.Context, userID int, bet int, resetMultiplie
 	// Если обычный спин, то сбрасываем множители и заново их инициализируем
 	if resetMultipliers {
 		// Обнуляем счетчики и множители в репозитории
-		if err := s.repo.ResetMultiplierState(ctx, userID); err != nil {
+		if err := s.cascadeRepo.ResetMultiplierState(ctx, userID); err != nil {
 			return nil, err
 		}
 		// Загружаем заново — Reset уже поставил 1 и 0
-		mult, hits, err = s.repo.GetMultiplierState(ctx, userID)
+		mult, hits, err = s.cascadeRepo.GetMultiplierState(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -201,21 +201,21 @@ func (s *serv) spinOnce(ctx context.Context, userID int, bet int, resetMultiplie
 	}
 
 	// Сохраняем обновлённое состояние множителей
-	if err := s.repo.SetMultiplierState(ctx, userID, mult, hits); err != nil {
+	if err := s.cascadeRepo.SetMultiplierState(ctx, userID, mult, hits); err != nil {
 		return nil, err
 	}
 
 	scatterCount := s.countScatters(board)
 	awarded := 0
 	if scatterCount >= 3 {
-		if v, ok := s.cfg.BonusAwards()[scatterCount]; ok {
+		if v, ok := s.cascadeConfig.BonusAwards()[scatterCount]; ok {
 			awarded = v
 
-			currentFS, err := s.repo.GetFreeSpinCount(ctx, userID)
+			currentFS, err := s.cascadeRepo.GetFreeSpinCount(ctx, userID)
 			if err != nil {
 				return nil, err
 			}
-			err = s.repo.UpdateFreeSpinCount(ctx, userID, currentFS+awarded)
+			err = s.cascadeRepo.UpdateFreeSpinCount(ctx, userID, currentFS+awarded)
 			if err != nil {
 				return nil, err
 			}
@@ -240,7 +240,7 @@ func (s *serv) spinOnce(ctx context.Context, userID int, bet int, resetMultiplie
 func (s *serv) fillBoard(board *[rows][cols]int) {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
-			if rand.Float64() < s.cfg.BonusProbPerColumn() {
+			if rand.Float64() < s.cascadeConfig.BonusProbPerColumn() {
 				board[r][c] = symbolBonus
 			} else {
 				board[r][c] = s.randomRegularSymbol()
@@ -273,7 +273,7 @@ func (s *serv) refill(board *[rows][cols]int) {
 	for c := 0; c < cols; c++ {
 		for r := 0; r < rows; r++ {
 			if board[r][c] == emptyCell {
-				if rand.Float64() < s.cfg.BonusProbPerColumn() {
+				if rand.Float64() < s.cascadeConfig.BonusProbPerColumn() {
 					board[r][c] = symbolBonus
 				} else {
 					board[r][c] = s.randomRegularSymbol()
@@ -285,7 +285,7 @@ func (s *serv) refill(board *[rows][cols]int) {
 
 // randomRegularSymbol выбирает случайный обычный символ с учётом весов
 func (s *serv) randomRegularSymbol() int {
-	weights := s.cfg.SymbolWeights()
+	weights := s.cascadeConfig.SymbolWeights()
 	total := 0
 	for _, w := range weights {
 		total += w
@@ -349,7 +349,7 @@ func (s *serv) calculateWin(cl cluster, mult [rows][cols]int, bet int) int {
 		return 0
 	}
 
-	payTable := s.cfg.PayoutTable()
+	payTable := s.cascadeConfig.PayoutTable()
 	base, ok := payTable[cl.symbol]
 	if !ok {
 		base = 0 // или можно логгировать ошибку конфигурации

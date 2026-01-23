@@ -17,9 +17,11 @@ func (s *serv) Register(ctx context.Context, user *model.User) (*model.AuthData,
 	user.Password = passwordHash
 
 	// Переменные для хранения результатов
-	var accessToken string
-	var refreshToken string
-	var sessionID string
+	var (
+		sessionID    string
+		refreshToken string
+		accessToken  string
+	)
 
 	// Начало транзакциии
 	err = s.txManager.Do(ctx, func(ctx context.Context) error {

@@ -11,13 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var (
+const (
 	table          = "sugar_rush_state"
 	playerId       = "player_id"
 	freeSpinsCount = "free_spins_count"
 	mult           = "multipliers"
 	hits           = "hits"
-	defltMult      = [7][7]int{
+)
+
+var (
+	defltMult = [7][7]int{
 		{1, 1, 1, 1, 1, 1, 1},
 		{1, 1, 1, 1, 1, 1, 1},
 		{1, 1, 1, 1, 1, 1, 1},
