@@ -6,10 +6,8 @@ import (
 )
 
 type LineService interface {
-	Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinResult, error)
-	BuyBonus(amount int) error
-	Deposit(amount int) error
-	CheckData() (*model.Data, error)
+	Spin(ctx context.Context, userID int, spinReq model.LineSpin) (*model.SpinResult, error)
+	BuyBonus(ctx context.Context, userID int, amount int) error
 }
 
 type CascadeService interface {

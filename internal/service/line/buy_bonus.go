@@ -1,21 +1,31 @@
 package line
 
 import (
+	"context"
 	"errors"
 )
 
 // Купить бонуску
-func (s *serv) BuyBonus(amount int) error {
+func (s *serv) BuyBonus(ctx context.Context, userID int, amount int) error {
 	cost := amount
 
-	balance, err := s.repo.GetBalance()
+	balance, err := s.userRepo.GetBalance(ctx, userID)
 	if err != nil {
 		return errors.New("failed to get user balance")
 	}
+
 	if balance < cost {
 		return errors.New("not enough balance for bonus buy")
 	}
-	err = s.repo.UpdateBalance(balance - cost)
-	err = s.repo.UpdateFreeSpinCount(10)
+
+	err = s.userRepo.UpdateBalance(ctx, userID, balance-cost)
+	if err != nil {
+		return errors.New("failed to update user balance")
+	}
+
+	err = s.repo.UpdateFreeSpinCount(ctx, userID, 10)
+	if err != nil {
+		return errors.New("failed to update free spin count")
+	}
 	return nil
 }

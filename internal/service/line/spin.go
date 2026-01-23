@@ -45,7 +45,7 @@ const (
 )
 
 // Spin выполняет спин с учётом баланса и фриспинов
-func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinResult, error) {
+func (s *serv) Spin(ctx context.Context, userID int, spinReq model.LineSpin) (*model.SpinResult, error) {
 	// Валидация ставки
 	// Если ставка меньше либо равна нулю или не кратна 2-м (т.е. нечетная) — ошибка
 	if spinReq.Bet <= 0 || spinReq.Bet%2 != 0 {
@@ -53,7 +53,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	}
 
 	// Получаем текущее количество фриспинов
-	countFreeSpins, err := s.repo.GetFreeSpinCount()
+	countFreeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, errors.New("failed to get count free spins")
 	}
@@ -62,7 +62,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 
 	// платный или фриспин?
 	if countFreeSpins == 0 {
-		userBalance, err := s.repo.GetBalance()
+		userBalance, err := s.userRepo.GetBalance(ctx, userID)
 		if err != nil {
 			return nil, errors.New("failed to get user balance")
 		}
@@ -72,19 +72,19 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 
 		// Списание должно быть атомарным! Здесь просто пример — в реале делайте в транзакции.
 		userBalance -= spinReq.Bet
-		if err := s.repo.UpdateBalance(userBalance); err != nil {
+		if err := s.userRepo.UpdateBalance(ctx, userID, userBalance); err != nil {
 			return nil, errors.New("failed to update user balance")
 		}
 	} else {
 		// фриспин — уменьшить счётчик сразу
 		res = &model.SpinResult{InFreeSpin: true}
-		if err := s.repo.UpdateFreeSpinCount(countFreeSpins - 1); err != nil {
+		if err := s.repo.UpdateFreeSpinCount(ctx, userID, countFreeSpins-1); err != nil {
 			return nil, errors.New("failed to update count free spins")
 		}
 	}
 
 	// делаем спин
-	res, err = s.SpinOnce(ctx, spinReq)
+	res, err = s.SpinOnce(ctx, userID, spinReq)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +95,13 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	}
 
 	// обновляем баланс
-	balance, err := s.repo.GetBalance()
+	balance, err := s.userRepo.GetBalance(ctx, userID)
 	if err != nil {
 		return nil, errors.New("failed to get user balance")
 	}
 	balance += res.TotalPayout
 
-	err = s.repo.UpdateBalance(balance)
+	err = s.userRepo.UpdateBalance(ctx, userID, balance)
 	if err != nil {
 		return nil, errors.New("failed to update user balance")
 	}
@@ -109,9 +109,9 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	// Если есть выигранные фриспины, добавляем их
 	if res.AwardedFreeSpins > 0 {
 		// Прибавляем новые спины к текущим
-		currentFree, err := s.repo.GetFreeSpinCount()
+		currentFree, err := s.repo.GetFreeSpinCount(ctx, userID)
 		if err == nil {
-			_ = s.repo.UpdateFreeSpinCount(currentFree + res.AwardedFreeSpins)
+			_ = s.repo.UpdateFreeSpinCount(ctx, userID, currentFree+res.AwardedFreeSpins)
 		}
 
 		// Обновляем то, что увидит клиент (чтобы сразу показать +15 спинов и т.д.)
@@ -119,7 +119,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	}
 
 	// Обновляем индекс свободных спинов в возвращаемом результате (актуально)
-	freeCount, err := s.repo.GetFreeSpinCount()
+	freeCount, err := s.repo.GetFreeSpinCount(ctx, userID)
 	if err != nil {
 		return nil, errors.New("failed to get count free spins")
 	}
@@ -138,8 +138,13 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 }
 
 // SpinOnce выполняет один спин (возвращает единый SpinResult)
-func (s *serv) SpinOnce(ctx context.Context, spinReq model.LineSpin) (*model.SpinResult, error) {
-	board, err := s.GenerateBoard()
+func (s *serv) SpinOnce(ctx context.Context, userID int, spinReq model.LineSpin) (*model.SpinResult, error) {
+	countFreeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
+	if err != nil {
+		return nil, errors.New("failed to get count free spins")
+	}
+
+	board, err := s.GenerateBoard(countFreeSpins)
 	if err != nil {
 		return nil, err
 	}
@@ -190,13 +195,8 @@ func (s *serv) SpinOnce(ctx context.Context, spinReq model.LineSpin) (*model.Spi
 }
 
 // GenerateBoard генерирует игровое поле матрицы 5x3
-func (s *serv) GenerateBoard() ([5][3]string, error) {
+func (s *serv) GenerateBoard(countFreeSpins int) ([5][3]string, error) {
 	var board [5][3]string
-
-	countFreeSpins, err := s.repo.GetFreeSpinCount()
-	if err != nil {
-		return board, errors.New("failed to get count free spins")
-	}
 
 	// Добавляем вайлды только на центральные 3 барабана (индексы 1,2,3)
 	wildReels := map[int]bool{}

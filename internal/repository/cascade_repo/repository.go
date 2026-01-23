@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -100,52 +101,6 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 	return nil
 }
 
-// ResetMultiplierState Сброс при начале платного спина
-func (r *repo) ResetMultiplierState(ctx context.Context, id int) error {
-	multJSON, err := json.Marshal(defltMult)
-	if err != nil {
-		return err
-	}
-	hitsJSON, err := json.Marshal(defltHits)
-	if err != nil {
-		return err
-	}
-
-	query := sq.Update(table).
-		Set(mult, multJSON).
-		Set(hits, hitsJSON).
-		Where(sq.Eq{playerId: id})
-
-	sqlStr, args, err := query.ToSql()
-	if err != nil {
-		return err
-	}
-
-	res, err := r.dbc.Exec(ctx, sqlStr, args...)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected := res.RowsAffected()
-
-	if rowsAffected == 0 {
-		insertQuery := sq.Insert(table).
-			Columns(playerId).
-			Values(id)
-
-		sqlStr, args, err = insertQuery.ToSql()
-		if err != nil {
-			return err
-		}
-
-		_, err = r.dbc.Exec(ctx, sqlStr, args...)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *repo) GetMultiplierState(ctx context.Context, id int) ([7][7]int, [7][7]int, error) {
 	query := sq.Select(mult, hits).
 		From(table).
@@ -224,5 +179,51 @@ func (r *repo) SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtr
 		}
 	}
 
+	return nil
+}
+
+// ResetMultiplierState Сброс при начале платного спина
+func (r *repo) ResetMultiplierState(ctx context.Context, id int) error {
+	multJSON, err := json.Marshal(defltMult)
+	if err != nil {
+		return err
+	}
+	hitsJSON, err := json.Marshal(defltHits)
+	if err != nil {
+		return err
+	}
+
+	query := sq.Update(table).
+		Set(mult, multJSON).
+		Set(hits, hitsJSON).
+		Where(sq.Eq{playerId: id})
+
+	sqlStr, args, err := query.ToSql()
+	if err != nil {
+		return err
+	}
+
+	res, err := r.dbc.Exec(ctx, sqlStr, args...)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := res.RowsAffected()
+
+	if rowsAffected == 0 {
+		insertQuery := sq.Insert(table).
+			Columns(playerId).
+			Values(id)
+
+		sqlStr, args, err = insertQuery.ToSql()
+		if err != nil {
+			return err
+		}
+
+		_, err = r.dbc.Exec(ctx, sqlStr, args...)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

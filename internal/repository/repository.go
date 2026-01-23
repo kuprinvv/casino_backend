@@ -6,21 +6,17 @@ import (
 )
 
 type LineRepository interface {
-	GetBalance() (int, error)
-	UpdateBalance(amount int) error
-	GetFreeSpinCount() (int, error)
-	UpdateFreeSpinCount(count int) error
+	GetFreeSpinCount(ctx context.Context, id int) (int, error)
+	UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 }
 
 type CascadeRepository interface {
-	GetBalance() (int, error)
-	UpdateBalance(amount int) error
-	GetFreeSpinCount() (int, error)
-	UpdateFreeSpinCount(count int) error
+	GetFreeSpinCount(ctx context.Context, id int) (int, error)
+	UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 
-	GetMultiplierState() ([7][7]int, [7][7]int)
-	SetMultiplierState(mult, hits [7][7]int) error
-	ResetMultiplierState() error
+	GetMultiplierState(ctx context.Context, id int) ([7][7]int, [7][7]int, error)
+	SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtrx [7][7]int) error
+	ResetMultiplierState(ctx context.Context, id int) error
 }
 
 type AuthRepository interface {
@@ -33,4 +29,7 @@ type AuthRepository interface {
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *model.User) (id int, err error)
 	GetUserByLogin(ctx context.Context, login string) (*model.User, error)
+
+	GetBalance(ctx context.Context, id int) (int, error)
+	UpdateBalance(ctx context.Context, id int, amount int) error
 }
