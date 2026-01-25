@@ -6,10 +6,12 @@ import (
 	"casino_backend/internal/config"
 	"casino_backend/internal/config/env"
 	"casino_backend/internal/repository"
+	"casino_backend/internal/repository/auth_repo"
 	"casino_backend/internal/repository/cascade_repo"
 	"casino_backend/internal/repository/cascade_stats_repo"
 	"casino_backend/internal/repository/line_repo"
 	"casino_backend/internal/repository/line_stats_repo"
+	"casino_backend/internal/repository/user_repo"
 	"casino_backend/internal/service"
 	"casino_backend/internal/service/cascade"
 	"casino_backend/internal/service/line"
@@ -30,6 +32,12 @@ type ServiceProvider struct {
 	// Database
 	pgConfig config.PGConfig
 	dbClient *pgxpool.Pool
+
+	// Auth bits
+	authRepo repository.AuthRepository
+
+	// User bits
+	userRepo repository.UserRepository
 
 	// Line bits
 	lineCfg       []config.LineConfig
@@ -80,6 +88,20 @@ func (sp *ServiceProvider) DBClient(ctx context.Context) *pgxpool.Pool {
 	return sp.dbClient
 }
 
+func (sp *ServiceProvider) AuthRepo(ctx context.Context) repository.AuthRepository {
+	if sp.authRepo == nil {
+		sp.authRepo = auth_repo.NewAuthRepository(sp.DBClient(ctx))
+	}
+	return sp.authRepo
+}
+
+func (sp *ServiceProvider) UserRepo(ctx context.Context) repository.UserRepository {
+	if sp.userRepo == nil {
+		sp.userRepo = user_repo.NewUserRepository(sp.DBClient(ctx))
+	}
+	return sp.userRepo
+}
+
 func (sp *ServiceProvider) TXManager(ctx context.Context) trm.Manager {
 	if sp.txManager == nil {
 		m, err := manager.New(trmpgx.NewDefaultFactory(sp.DBClient(ctx)))
@@ -123,7 +145,7 @@ func (sp *ServiceProvider) LineStatsRepository() repository.LineStatsRepository 
 func (sp *ServiceProvider) LineService(ctx context.Context) service.LineService {
 	if sp.lineServ == nil {
 		// Добавить в аргументы репозиторий пользователей, когда он появится
-		sp.lineServ = line.NewLineService(sp.LineCfg(), sp.LineRepository(ctx), nil, sp.LineStatsRepository())
+		sp.lineServ = line.NewLineService(sp.LineCfg(), sp.LineRepository(ctx), sp.UserRepo(ctx), sp.LineStatsRepository())
 	}
 	return sp.lineServ
 }
@@ -164,7 +186,7 @@ func (sp *ServiceProvider) CascadeStatsRepository() repository.CascadeStatsRepos
 
 func (sp *ServiceProvider) CascadeService(ctx context.Context) service.CascadeService {
 	if sp.cascadeServ == nil {
-		sp.cascadeServ = cascade.NewCascadeService(sp.CascadeCfg(), sp.CascadeRepository(ctx), nil, sp.CascadeStatsRepository())
+		sp.cascadeServ = cascade.NewCascadeService(sp.CascadeCfg(), sp.CascadeRepository(ctx), sp.UserRepo(ctx), sp.CascadeStatsRepository())
 	}
 	return sp.cascadeServ
 }

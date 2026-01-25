@@ -13,7 +13,7 @@ import (
 
 const (
 	table          = "sugar_rush_state"
-	playerId       = "player_id"
+	playerId       = "user_id"
 	freeSpinsCount = "free_spins_count"
 	mult           = "multipliers"
 	hits           = "hits"
@@ -50,6 +50,8 @@ func NewCascadeRepository(dbc *pgxpool.Pool) repository.CascadeRepository {
 	}
 }
 
+// GetFreeSpinCount - получение количества бесплатных спинов у пользователя
+// Возвращает 0, если записи нет
 func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	query := sq.Select(freeSpinsCount).
 		From(table).
@@ -68,6 +70,8 @@ func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	return count, nil
 }
 
+// UpdateFreeSpinCount - обновление количества бесплатных спинов у пользователя
+// Если записи нет, создается новая с указанным количеством спинов
 func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error {
 	query := sq.Update(table).
 		Set(freeSpinsCount, count).
@@ -104,6 +108,8 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 	return nil
 }
 
+// GetMultiplierState - получение состояния мультипликаторов и хитов
+// Возвращает дефолтные значения, если записи нет
 func (r *repo) GetMultiplierState(ctx context.Context, id int) ([7][7]int, [7][7]int, error) {
 	query := sq.Select(mult, hits).
 		From(table).
@@ -138,6 +144,8 @@ func (r *repo) GetMultiplierState(ctx context.Context, id int) ([7][7]int, [7][7
 	return multipliers, hitsArr, nil
 }
 
+// SetMultiplierState - установка состояния мультипликаторов и хитов
+// Создает запись, если ее нет
 func (r *repo) SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtrx [7][7]int) error {
 	multJSON, err := json.Marshal(multMtrx)
 	if err != nil {
@@ -185,7 +193,8 @@ func (r *repo) SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtr
 	return nil
 }
 
-// ResetMultiplierState Сброс при начале платного спина
+// ResetMultiplierState - сброс при начале платного спина
+// Устанавливает мультипликаторы и хиты в дефолтные значения
 func (r *repo) ResetMultiplierState(ctx context.Context, id int) error {
 	multJSON, err := json.Marshal(defltMult)
 	if err != nil {

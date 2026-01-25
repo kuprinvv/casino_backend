@@ -12,7 +12,7 @@ import (
 
 const (
 	table          = "free_spins_count"
-	playerId       = "player_id"
+	playerId       = "user_id"
 	freeSpinsCount = "free_spins_count"
 )
 
@@ -26,6 +26,8 @@ func NewLineRepository(dbc *pgxpool.Pool) repository.LineRepository {
 	}
 }
 
+// GetFreeSpinCount - получение количества бесплатных спинов у пользователя
+// Возвращает 0, если записи нет
 func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	// Формируем запрос
 	query := sq.Select(freeSpinsCount).
@@ -49,6 +51,8 @@ func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	return count, nil
 }
 
+// UpdateFreeSpinCount - обновление количества бесплатных спинов у пользователя
+// Если записи нет, создается новая с указанным количеством спинов
 func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error {
 	// Формируем запрос
 	query := sq.Update(table).
