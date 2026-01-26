@@ -55,7 +55,8 @@ func NewCascadeRepository(dbc *pgxpool.Pool) repository.CascadeRepository {
 func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	query := sq.Select(freeSpinsCount).
 		From(table).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -75,7 +76,8 @@ func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error {
 	query := sq.Update(table).
 		Set(freeSpinsCount, count).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -93,7 +95,8 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 		// No row updated, so insert a new one with defaults for other fields
 		insertQuery := sq.Insert(table).
 			Columns(playerId, freeSpinsCount).
-			Values(id, count)
+			Values(id, count).
+			PlaceholderFormat(sq.Dollar)
 
 		sqlStr, args, err = insertQuery.ToSql()
 		if err != nil {
@@ -113,7 +116,8 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 func (r *repo) GetMultiplierState(ctx context.Context, id int) ([7][7]int, [7][7]int, error) {
 	query := sq.Select(mult, hits).
 		From(table).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -160,7 +164,8 @@ func (r *repo) SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtr
 	query := sq.Update(table).
 		Set(mult, multJSON).
 		Set(hits, hitsJSON).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -177,7 +182,8 @@ func (r *repo) SetMultiplierState(ctx context.Context, id int, multMtrx, hitsMtr
 	if rowsAffected == 0 {
 		insertQuery := sq.Insert(table).
 			Columns(playerId, mult, hits).
-			Values(id, multJSON, hitsJSON)
+			Values(id, multJSON, hitsJSON).
+			PlaceholderFormat(sq.Dollar)
 
 		sqlStr, args, err = insertQuery.ToSql()
 		if err != nil {
@@ -208,7 +214,8 @@ func (r *repo) ResetMultiplierState(ctx context.Context, id int) error {
 	query := sq.Update(table).
 		Set(mult, multJSON).
 		Set(hits, hitsJSON).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -225,7 +232,8 @@ func (r *repo) ResetMultiplierState(ctx context.Context, id int) error {
 	if rowsAffected == 0 {
 		insertQuery := sq.Insert(table).
 			Columns(playerId).
-			Values(id)
+			Values(id).
+			PlaceholderFormat(sq.Dollar)
 
 		sqlStr, args, err = insertQuery.ToSql()
 		if err != nil {

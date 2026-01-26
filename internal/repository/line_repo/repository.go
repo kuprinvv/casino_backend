@@ -32,7 +32,8 @@ func (r *repo) GetFreeSpinCount(ctx context.Context, id int) (int, error) {
 	// Формируем запрос
 	query := sq.Select(freeSpinsCount).
 		From(table).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -57,7 +58,8 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 	// Формируем запрос
 	query := sq.Update(table).
 		Set(freeSpinsCount, count).
-		Where(sq.Eq{playerId: id})
+		Where(sq.Eq{playerId: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -75,7 +77,8 @@ func (r *repo) UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 	if rowsAffected == 0 {
 		insertQuery := sq.Insert(table).
 			Columns(playerId, freeSpinsCount).
-			Values(id, count)
+			Values(id, count).
+			PlaceholderFormat(sq.Dollar)
 
 		sqlStr, args, err = insertQuery.ToSql()
 		if err != nil {

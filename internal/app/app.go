@@ -1,6 +1,7 @@
 package app
 
 import (
+	"casino_backend/internal/config"
 	"context"
 	"log"
 	"net/http"
@@ -19,13 +20,17 @@ func (s *App) initServiceProvider() {
 }
 
 func (s *App) Run() error {
+	err := config.Load(".env")
+	if err != nil {
+		log.Printf("Error loading .env file: %v", err)
+	}
 	s.initServiceProvider()
 
 	ctx := context.Background()
 	r := s.ServiceProvider.Router(ctx)
 
 	log.Printf("starting server at %s", s.ServiceProvider.HTTPCfg().Address())
-	err := http.ListenAndServe(s.ServiceProvider.HTTPCfg().Address(), r)
+	err = http.ListenAndServe(s.ServiceProvider.HTTPCfg().Address(), r)
 	if err != nil {
 		return err
 	}

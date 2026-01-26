@@ -33,7 +33,8 @@ func (r *repo) CreateSession(ctx context.Context, session *model.Session) error 
 	// Формируем запрос
 	query := sq.Insert(table).
 		Columns(colSessionID, colUserID, colRefreshHash, colExpiredTime).
-		Values(session.ID, session.UserID, session.RefreshToken, session.ExpiresAt)
+		Values(session.ID, session.UserID, session.RefreshToken, session.ExpiresAt).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -54,7 +55,8 @@ func (r *repo) GetRefreshTokenBySessionID(ctx context.Context, sessionID string)
 	// Формируем запрос
 	query := sq.Select(colRefreshHash).
 		From(table).
-		Where(sq.Eq{colSessionID: sessionID})
+		Where(sq.Eq{colSessionID: sessionID}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -76,7 +78,8 @@ func (r *repo) GetUserIDBySessionID(ctx context.Context, sessionID string) (int,
 	// Формируем запрос
 	query := sq.Select(colUserID).
 		From(table).
-		Where(sq.Eq{colSessionID: sessionID})
+		Where(sq.Eq{colSessionID: sessionID}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -97,7 +100,8 @@ func (r *repo) GetUserIDBySessionID(ctx context.Context, sessionID string) (int,
 func (r *repo) DeleteSession(ctx context.Context, sessionID string) error {
 	// Формируем запрос
 	query := sq.Delete(table).
-		Where(sq.Eq{colSessionID: sessionID})
+		Where(sq.Eq{colSessionID: sessionID}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -118,7 +122,8 @@ func (r *repo) GetUserBySessionID(ctx context.Context, sessionID string) (*model
 	query := sq.Select("u.id", "u.name", "u.login", "u.password_hash", "u.balance").
 		From(table + " s").
 		Join("users u ON s." + colUserID + " = u.id").
-		Where(sq.Eq{"s." + colSessionID: sessionID})
+		Where(sq.Eq{"s." + colSessionID: sessionID}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {

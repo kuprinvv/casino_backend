@@ -37,7 +37,8 @@ func (r *repo) CreateUser(ctx context.Context, user *model.User) (int, error) {
 	query := sq.Insert(table).
 		Columns(colName, colLogin, colPasswordHash, colBalance).
 		Values(user.Name, user.Login, user.Password, int64(user.Balance)).
-		Suffix("RETURNING " + colID)
+		Suffix("RETURNING " + colID).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -58,7 +59,8 @@ func (r *repo) GetUserByLogin(ctx context.Context, login string) (*model.User, e
 	// Формируем запрос
 	query := sq.Select(colID, colName, colLogin, colPasswordHash, colBalance).
 		From(table).
-		Where(sq.Eq{colLogin: login})
+		Where(sq.Eq{colLogin: login}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -85,7 +87,8 @@ func (r *repo) GetBalance(ctx context.Context, id int) (int, error) {
 	// Формируем запрос
 	query := sq.Select(colBalance).
 		From(table).
-		Where(sq.Eq{colID: id})
+		Where(sq.Eq{colID: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {
@@ -110,7 +113,8 @@ func (r *repo) UpdateBalance(ctx context.Context, id int, amount int) error {
 	// Формируем запрос
 	query := sq.Update(table).
 		Set(colBalance, int64(amount)).
-		Where(sq.Eq{colID: id})
+		Where(sq.Eq{colID: id}).
+		PlaceholderFormat(sq.Dollar)
 
 	sqlStr, args, err := query.ToSql()
 	if err != nil {

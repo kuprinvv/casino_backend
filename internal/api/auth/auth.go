@@ -146,7 +146,7 @@ func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken,
-		Path:     "/refresh",
+		Path:     "/",
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
