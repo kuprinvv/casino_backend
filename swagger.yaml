@@ -1,0 +1,810 @@
+openapi: 3.0.3
+info:
+  title: Casino Backend API
+  description: |
+    API для онлайн-казино с поддержкой двух типов игр:
+    - Line Slots (слоты с линиями)
+    - Cascade Slots (каскадные слоты)
+    
+    Все эндпоинты, кроме `/auth/*`, требуют аутентификации через Bearer токен.
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Auth
+    description: Аутентификация и управление сессиями
+  - name: Payment
+    description: Управление балансом и депозитами
+  - name: Line
+    description: Игра Line Slots
+  - name: Cascade
+    description: Игра Cascade Slots
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Регистрация нового пользователя
+      description: |
+        Создает нового пользователя и автоматически создает сессию.
+        Возвращает access_token в теле ответа.
+        refresh_token и session_id устанавливаются через HTTP-only cookies.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: "John Doe"
+              login: "johndoe"
+              password: "securepassword123"
+      responses:
+        '201':
+          description: Пользователь успешно зарегистрирован
+          headers:
+            Set-Cookie:
+              description: |
+                Устанавливает cookies:
+                - session_id (HttpOnly, Path=/)
+                - refresh_token (HttpOnly, Path=/refresh)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Пользователь с таким логином уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "register failed"
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Вход в систему
+      description: |
+        Создает новую сессию для существующего пользователя.
+        Возвращает access_token в теле ответа.
+        refresh_token и session_id устанавливаются через HTTP-only cookies.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              login: "johndoe"
+              password: "securepassword123"
+      responses:
+        '200':
+          description: Успешный вход
+          headers:
+            Set-Cookie:
+              description: |
+                Устанавливает cookies:
+                - session_id (HttpOnly, Path=/)
+                - refresh_token (HttpOnly, Path=/refresh)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Неверный логин или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "login failed"
+
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Обновление access токена
+      description: |
+        Обновляет access_token по session_id и refresh_token из cookies.
+        Возвращает новый access_token в теле ответа.
+      operationId: refresh
+      responses:
+        '200':
+          description: Токен успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '401':
+          description: Неверный или истекший refresh токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "refresh failed"
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Выход из системы
+      description: |
+        Закрывает сессию пользователя и удаляет cookies.
+        Требует session_id cookie.
+      operationId: logout
+      responses:
+        '204':
+          description: Успешный выход
+          headers:
+            Set-Cookie:
+              description: |
+                Удаляет cookies:
+                - session_id
+                - refresh_token
+              schema:
+                type: string
+        '401':
+          description: Сессия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "no session_id cookie"
+
+  /pay/deposit:
+    post:
+      tags:
+        - Payment
+      summary: Пополнение баланса
+      description: Пополняет баланс текущего пользователя на указанную сумму
+      operationId: deposit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositRequest'
+            example:
+              amount: 1000
+      responses:
+        '200':
+          description: Баланс успешно пополнен
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /pay/balance:
+    get:
+      tags:
+        - Payment
+      summary: Получение баланса
+      description: Возвращает текущий баланс пользователя
+      operationId: getBalance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+              example:
+                balance: 5000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /line/spin:
+    post:
+      tags:
+        - Line
+      summary: Выполнить спин в Line Slots
+      description: |
+        Выполняет один спин в игре Line Slots.
+        Ставка должна быть положительным четным числом.
+        Если у пользователя есть фриспины, используется фриспин вместо списания баланса.
+      operationId: lineSpin
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LineSpinRequest'
+            example:
+              bet: 100
+      responses:
+        '200':
+          description: Спин выполнен успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineSpinResponse'
+              example:
+                board:
+                  - ["A", "B", "C"]
+                  - ["D", "E", "F"]
+                  - ["G", "H", "I"]
+                  - ["J", "K", "L"]
+                  - ["M", "N", "O"]
+                line_wins:
+                  - line: 1
+                    symbol: "A"
+                    count: 3
+                    payout: 50
+                scatter_count: 2
+                scatter_payout: 0
+                awarded_free_spins: 0
+                total_payout: 50
+                balance: 4950
+                free_spin_count: 0
+                in_free_spin: false
+        '400':
+          description: Неверная ставка (должна быть положительным четным числом)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "bet must be positive and even"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /line/buy-bonus:
+    post:
+      tags:
+        - Line
+      summary: Покупка бонуса в Line Slots
+      description: Покупает бонус (фриспины) за указанную сумму
+      operationId: lineBuyBonus
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyBonusRequest'
+            example:
+              amount: 1000
+      responses:
+        '200':
+          description: Бонус успешно куплен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cascade/spin:
+    post:
+      tags:
+        - Cascade
+      summary: Выполнить спин в Cascade Slots
+      description: |
+        Выполняет один спин в игре Cascade Slots (Sugar Rush).
+        Ставка должна быть положительным четным числом.
+        Если у пользователя есть фриспины, используется фриспин вместо списания баланса.
+        Возвращает полную информацию о каскадах для анимации.
+      operationId: cascadeSpin
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CascadeSpinRequest'
+            example:
+              bet: 100
+      responses:
+        '200':
+          description: Спин выполнен успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CascadeSpinResponse'
+              example:
+                initial_board:
+                  - [0, 1, 2, 3, 4, 5, 6]
+                  - [1, 2, 3, 4, 5, 6, 0]
+                  - [2, 3, 4, 5, 6, 0, 1]
+                  - [3, 4, 5, 6, 0, 1, 2]
+                  - [4, 5, 6, 0, 1, 2, 3]
+                  - [5, 6, 0, 1, 2, 3, 4]
+                  - [6, 0, 1, 2, 3, 4, 5]
+                board:
+                  - [0, 1, 2, -1, 4, 5, 6]
+                  - [1, 2, 3, -1, 5, 6, 0]
+                  - [2, 3, 4, -1, 6, 0, 1]
+                  - [3, 4, 5, -1, 0, 1, 2]
+                  - [4, 5, 6, -1, 1, 2, 3]
+                  - [5, 6, 0, -1, 2, 3, 4]
+                  - [6, 0, 1, -1, 3, 4, 5]
+                cascades:
+                  - cascade_index: 0
+                    clusters:
+                      - symbol: 3
+                        cells:
+                          - row: 0
+                            col: 3
+                          - row: 1
+                            col: 3
+                          - row: 2
+                            col: 3
+                          - row: 3
+                            col: 3
+                          - row: 4
+                            col: 3
+                        count: 5
+                        payout: 100
+                        multiplier: 2
+                    new_symbols:
+                      - position:
+                          row: 0
+                          col: 3
+                        symbol: 1
+                total_payout: 100
+                balance: 4900
+                scatter_count: 0
+                awarded_free_spins: 0
+                free_spins_left: 0
+                in_free_spin: false
+        '400':
+          description: Неверная ставка (должна быть положительным четным числом)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "bet must be positive and even"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cascade/buy-bonus:
+    post:
+      tags:
+        - Cascade
+      summary: Покупка бонуса в Cascade Slots
+      description: Покупает бонус (фриспины) за указанную сумму
+      operationId: cascadeBuyBonus
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyCascadeBonusRequest'
+            example:
+              amount: 10000
+      responses:
+        '200':
+          description: Бонус успешно куплен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: string
+                    example: "ok"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT токен в формате: Bearer {token}
+        Получите токен через /auth/register или /auth/login
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - login
+        - password
+      properties:
+        name:
+          type: string
+          description: Имя пользователя
+          example: "John Doe"
+        login:
+          type: string
+          description: Уникальный логин
+          example: "johndoe"
+        password:
+          type: string
+          format: password
+          description: Пароль пользователя
+          example: "securepassword123"
+
+    LoginRequest:
+      type: object
+      required:
+        - login
+        - password
+      properties:
+        login:
+          type: string
+          description: Логин пользователя
+          example: "johndoe"
+        password:
+          type: string
+          format: password
+          description: Пароль пользователя
+          example: "securepassword123"
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access токен для аутентификации
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    DepositRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          description: Сумма депозита (в минимальных единицах валюты)
+          minimum: 1
+          example: 1000
+
+    BalanceResponse:
+      type: object
+      properties:
+        balance:
+          type: integer
+          description: Текущий баланс пользователя
+          example: 5000
+
+    LineSpinRequest:
+      type: object
+      required:
+        - bet
+      properties:
+        bet:
+          type: integer
+          description: Размер ставки (должно быть положительным четным числом)
+          minimum: 2
+          multipleOf: 2
+          example: 100
+
+    LineSpinResponse:
+      type: object
+      properties:
+        board:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Игровое поле 5x3 с символами
+          example:
+            - ["A", "B", "C"]
+            - ["D", "E", "F"]
+            - ["G", "H", "I"]
+            - ["J", "K", "L"]
+            - ["M", "N", "O"]
+        line_wins:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineWin'
+          description: Список выигрышных линий
+        scatter_count:
+          type: integer
+          description: Количество скаттеров на доске
+          example: 2
+        scatter_payout:
+          type: integer
+          description: Выплата по скаттерам
+          example: 0
+        awarded_free_spins:
+          type: integer
+          description: Количество фриспинов, начисленных в этом спине
+          example: 0
+        total_payout:
+          type: integer
+          description: Общая выплата за спин
+          example: 50
+        balance:
+          type: integer
+          description: Баланс пользователя после спина
+          example: 4950
+        free_spin_count:
+          type: integer
+          description: Остаток фриспинов после спина
+          example: 0
+        in_free_spin:
+          type: boolean
+          description: Был ли это фриспин
+          example: false
+
+    LineWin:
+      type: object
+      properties:
+        line:
+          type: integer
+          description: Номер линии (1-20)
+          minimum: 1
+          maximum: 20
+          example: 1
+        symbol:
+          type: string
+          description: ID символа
+          example: "A"
+        count:
+          type: integer
+          description: Количество совпавших символов (3-5)
+          minimum: 3
+          maximum: 5
+          example: 3
+        payout:
+          type: integer
+          description: Выплата за эту линию
+          example: 50
+
+    BuyBonusRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          description: Сумма покупки бонуса
+          minimum: 1
+          example: 1000
+
+    CascadeSpinRequest:
+      type: object
+      required:
+        - bet
+      properties:
+        bet:
+          type: integer
+          description: Размер ставки (должно быть положительным четным числом)
+          minimum: 2
+          multipleOf: 2
+          example: 100
+
+    CascadeSpinResponse:
+      type: object
+      properties:
+        initial_board:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+          description: Доска сразу после начального заполнения, до любых каскадов (7x7)
+          example:
+            - [0, 1, 2, 3, 4, 5, 6]
+            - [1, 2, 3, 4, 5, 6, 0]
+        board:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+          description: |
+            Итоговая доска после всех каскадов (7x7).
+            -1 = пусто, 0-6 = обычные символы, 7 = скаттер
+          example:
+            - [0, 1, 2, -1, 4, 5, 6]
+            - [1, 2, 3, -1, 5, 6, 0]
+        cascades:
+          type: array
+          items:
+            $ref: '#/components/schemas/CascadeStep'
+          description: Все шаги каскада для анимации
+        total_payout:
+          type: integer
+          description: Общая выплата за спин
+          example: 100
+        balance:
+          type: integer
+          description: Баланс пользователя после спина
+          example: 4900
+        scatter_count:
+          type: integer
+          description: Количество скаттеров на финальной доске
+          example: 0
+        awarded_free_spins:
+          type: integer
+          description: Количество фриспинов, начисленных в этом спине
+          example: 0
+        free_spins_left:
+          type: integer
+          description: Остаток фриспинов после спина
+          example: 0
+        in_free_spin:
+          type: boolean
+          description: Был ли это фриспин
+          example: false
+
+    CascadeStep:
+      type: object
+      properties:
+        cascade_index:
+          type: integer
+          description: Индекс каскада (0 = первый, 1 = второй и т.д.)
+          minimum: 0
+          example: 0
+        clusters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterInfo'
+          description: Какие кластеры взорвались на этом шаге
+        new_symbols:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewSymbol'
+          description: Новые символы, упавшие сверху
+
+    ClusterInfo:
+      type: object
+      properties:
+        symbol:
+          type: integer
+          description: ID символа (0-6)
+          minimum: 0
+          maximum: 6
+          example: 3
+        cells:
+          type: array
+          items:
+            $ref: '#/components/schemas/Position'
+          description: Координаты ячеек в кластере
+        count:
+          type: integer
+          description: Размер кластера (≥5)
+          minimum: 5
+          example: 5
+        payout:
+          type: integer
+          description: Выплата за кластер
+          example: 100
+        multiplier:
+          type: integer
+          description: Средний множитель (x2, x4, ..., x128)
+          example: 2
+
+    Position:
+      type: object
+      properties:
+        row:
+          type: integer
+          description: Номер строки (0-6)
+          minimum: 0
+          maximum: 6
+          example: 0
+        col:
+          type: integer
+          description: Номер столбца (0-6)
+          minimum: 0
+          maximum: 6
+          example: 3
+
+    NewSymbol:
+      type: object
+      properties:
+        position:
+          $ref: '#/components/schemas/Position'
+        symbol:
+          type: integer
+          description: |
+            -1 = пусто
+            0-6 = обычный символ
+            7 = скаттер
+          minimum: -1
+          maximum: 7
+          example: 1
+
+    BuyCascadeBonusRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          description: Сумма покупки бонуса (обычно = bet × 100)
+          minimum: 1
+          example: 10000
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Сообщение об ошибке
+          example: "Invalid request"
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid request"
+
+    Unauthorized:
+      description: Требуется аутентификация или токен недействителен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Unauthorized"
+
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
