@@ -1,12 +1,22 @@
 FROM golang:1.25.6-alpine AS builder
 
-COPY . /app/
-WORKDIR /app/
+WORKDIR /app
 
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -o ./bin/server cmd/main.go
 
-FROM alpine:latest
-WORKDIR /root/
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o bin/server cmd/main.go
+
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
 COPY --from=builder /app/bin/server .
-CMD ["./server"]
+
+USER nobody:nobody
+ENTRYPOINT ["./server"]
