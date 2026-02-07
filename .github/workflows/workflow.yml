@@ -59,6 +59,6 @@ jobs:
           script: |
             set -e
             docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            cd /opt
+            cd ~/opt
             docker compose pull
             docker compose up -d
