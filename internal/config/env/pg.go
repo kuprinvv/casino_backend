@@ -17,7 +17,7 @@ type pgConfig struct {
 func NewPGConfig() (config.PGConfig, error) {
 	dsn := os.Getenv(dsnName)
 	if len(dsn) == 0 {
-		return nil, errors.New("pg dsn not found")
+		return nil, errors.New("pg dsn  not found")
 	}
 
 	return &pgConfig{
