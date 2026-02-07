@@ -3,7 +3,7 @@ name: Build, Push and Deploy (GHCR)
 on:
   push:
     branches:
-      - main
+      - master
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
