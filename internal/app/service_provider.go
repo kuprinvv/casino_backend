@@ -300,7 +300,7 @@ func (sp *ServiceProvider) Router(ctx context.Context) chi.Router {
 
 		// CORS middleware
 		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{"http://192.168.143.41:5173"},
+			AllowedOrigins:   []string{"http://158.160.167.237"},
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 			ExposedHeaders:   []string{"Link"},
