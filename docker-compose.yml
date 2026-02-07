@@ -8,9 +8,9 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${HTTP_PORT}:8080"
+      - "${HTTP_PORT}:8085"
     environment:
-      - HTTP_HOST=0.0.0.0
+      - HTTP_HOST=
       - HTTP_PORT=8080
       - PG_DSN=host=pg port=5432 dbname=${PG_DATABASE_NAME} user=${PG_USER} password=${PG_PASSWORD} sslmode=disable
       - ACCESS_TOKEN=${ACCESS_TOKEN}
@@ -26,7 +26,7 @@ services:
 
 
   pg:
-    image: postgres:18-alpine
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${PG_DATABASE_NAME}
       POSTGRES_USER: ${PG_USER}

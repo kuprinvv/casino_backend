@@ -23,7 +23,7 @@ func (s *serv) Register(ctx context.Context, user *model.User) (*model.AuthData,
 		accessToken  string
 	)
 
-	// Начало транзакциии
+	// Начало транзакции
 	err = s.txManager.Do(ctx, func(ctx context.Context) error {
 		// 1. Создать пользователя в бд
 		user.ID, err = s.userRepo.CreateUser(ctx, user)
