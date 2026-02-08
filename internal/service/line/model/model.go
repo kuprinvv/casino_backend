@@ -2,7 +2,6 @@ package model
 
 var (
 	// PlayLines Линии выплат
-	//TODO обновить playlines как они были у никиты
 	PlayLines = [][]int{
 		{1, 1, 1, 1, 1},
 		{0, 0, 0, 0, 0},
