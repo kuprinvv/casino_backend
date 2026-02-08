@@ -36,7 +36,7 @@ func NewLineStatsRepository() *StateRepo {
 		TotalPayout:        0,
 		CurrentRTP:         95.0,
 		TargetRTP:          95.0, // Можно сделать настраиваемым
-		PresetIndex:        5,
+		PresetIndex:        2,
 		Adjustments:        make([]repoModel.AdjustmentLog, 0),
 		EmergencyMode:      false,
 		EmergencyDirection: "",
