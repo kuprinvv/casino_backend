@@ -218,7 +218,6 @@ func (sp *ServiceProvider) LineStatsRepository() repository.LineStatsRepository 
 func (sp *ServiceProvider) LineService(ctx context.Context) service.LineService {
 	if sp.lineServ == nil {
 		sp.lineServ = line.NewLineService(
-			sp.LineCfg(),
 			sp.LineRepository(ctx),
 			sp.UserRepo(ctx),
 			sp.LineStatsRepository(),

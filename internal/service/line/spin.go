@@ -206,13 +206,15 @@ func (s *serv) GenerateBoard(preset servModel.RTPPreset) [5][3]string {
 
 		// Если на верхнем символе выпало "W" на барабанах 2, 3 или 4, то заполняем весь барабан "X"
 		if r == 1 || r == 2 || r == 3 {
-			for row := 0; row < 3; row++ {
-				symbol := getSymbolFromProbs(reelProbs)
-				if symbol == "W" {
-					board[r][0], board[r][1], board[r][2] = "W", "W", "W"
-					break
-				}
-				board[r][row] = symbol
+			// Генерируем один раз для всего барабана
+			symbol := getSymbolFromProbs(reelProbs)
+			if symbol == "W" {
+				board[r][0], board[r][1], board[r][2] = "W", "W", "W"
+			} else {
+				// Иначе заполняем 3 независимых символа
+				board[r][0] = symbol
+				board[r][1] = getSymbolFromProbs(reelProbs)
+				board[r][2] = getSymbolFromProbs(reelProbs)
 			}
 		} else {
 			// Для остальных барабанов (первого и последнего) просто заполняем по весам
