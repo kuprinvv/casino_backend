@@ -4,7 +4,7 @@ import "time"
 
 // Состояние казино
 type CasinoState struct {
-	TotalSpins  int64   // Сколько всего спинов сделано
+	TotalSpins  int     // Сколько всего спинов сделано
 	TotalBet    float64 // Сумма всех ставок
 	TotalPayout float64 // Сумма всех выплат
 

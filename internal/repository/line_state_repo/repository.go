@@ -2,7 +2,11 @@ package line_state_repo
 
 import (
 	repoModel "casino_backend/internal/repository/line_state_repo/model"
+	servModel "casino_backend/internal/service/line/model"
+	"fmt"
+	"math"
 	"sync"
+	"time"
 )
 
 // Реализация репозитория для хранения состояния казино
@@ -11,14 +15,14 @@ type stateRepo struct {
 	state repoModel.CasinoState
 }
 
-// Конструктор для создания нового репозитория с начальным состоянием
+// NewLineStatsRepository Конструктор для создания нового репозитория с начальным состоянием
 func NewLineStatsRepository(initialState repoModel.CasinoState) *stateRepo {
 	return &stateRepo{
 		state: initialState,
 	}
 }
 
-// Получение текущего состояния казино
+// CasinoState Получение текущего состояния казино
 // Является геттером для структуры состояния казино
 // Возвращает копию структуры CasinoState
 func (r *stateRepo) CasinoState() repoModel.CasinoState {
@@ -27,7 +31,7 @@ func (r *stateRepo) CasinoState() repoModel.CasinoState {
 	return r.state
 }
 
-// Обновление состояния казино после спина
+// UpdateState Обновление состояния казино после спина
 func (r *stateRepo) UpdateState(bet, payout float64) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
@@ -67,4 +71,142 @@ func (r *stateRepo) UpdateState(bet, payout float64) {
 	} else {
 		r.state.WindowRTP = 0
 	}
+}
+
+// SmartAutoAdjust УМНАЯ АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА RTP
+func (r *stateRepo) SmartAutoAdjust() bool {
+	if r.state.TotalSpins%50 == 0 && r.state.TotalSpins > 1000 {
+		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
+		if r.emergencyCheck() {
+			return r.applyEmergencyAdjustment()
+		}
+		// 2. СТАНДАРТНАЯ КОРРЕКТИРОВКА (отклонение > 5%)
+		if r.standardCheck() {
+			return r.applyStandardAdjustment()
+		}
+	}
+	return false
+}
+
+// Экстренная проверка.
+// Если RTP в окне отклоняется от целевого более чем на 20% - включаем экстренный режим
+func (r *stateRepo) emergencyCheck() bool {
+	if len(r.state.SpinWindow) < 1000 {
+		return false
+	}
+	absoluteDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
+
+	// Экстренная ситуация: отклонение > 20%
+	if absoluteDiff > 20.0 {
+		r.state.EmergencyMode = true
+
+		if r.state.WindowRTP > r.state.TargetRTP {
+			r.state.EmergencyDirection = "high"
+		} else {
+			r.state.EmergencyDirection = "low"
+		}
+		return true
+	}
+	// Выходим из экстренного режима
+	if r.state.EmergencyMode && absoluteDiff < 10.0 {
+		r.state.EmergencyMode = false
+		r.state.EmergencyDirection = ""
+	}
+	return false
+}
+
+// Применение экстренной корректировки
+// Если RTP слишком высокий - понижаем, если слишком низкий - повышаем
+func (r *stateRepo) applyEmergencyAdjustment() bool {
+	adjustmentReason := "Экстренная корректировка"
+
+	var newIndex int
+	if r.state.EmergencyDirection == "high" {
+		if r.state.PresetIndex > 0 {
+			newIndex = r.state.PresetIndex - 1
+			adjustmentReason = fmt.Sprintf("%s (RTP слишком высокий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
+		} else {
+			return false
+		}
+	} else {
+		if r.state.PresetIndex < len(servModel.RtpPresets)-1 {
+			newIndex = r.state.PresetIndex + 1
+			adjustmentReason = fmt.Sprintf("%s (RTP слишком низкий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
+		} else {
+			return false
+		}
+	}
+
+	return r.applyAdjustment(newIndex, adjustmentReason)
+}
+
+// Стандартная проверка
+func (r *stateRepo) standardCheck() bool {
+	if len(r.state.SpinWindow) < 1000 {
+		return false
+	}
+
+	if r.state.EmergencyMode {
+		return false
+	}
+
+	windowDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
+
+	if windowDiff > 5.0 {
+		if r.state.TotalSpins > 3000 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Применение стандартной корректировки
+func (r *stateRepo) applyStandardAdjustment() bool {
+	windowDiff := r.state.WindowRTP - r.state.TargetRTP
+	var newIndex int
+	var reason string
+
+	if windowDiff > 5.0 {
+		if r.state.PresetIndex > 0 {
+			newIndex = r.state.PresetIndex - 1
+			reason = fmt.Sprintf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
+		} else {
+			return false
+		}
+	} else if windowDiff < -5.0 {
+		if r.state.PresetIndex < len(servModel.RtpPresets)-1 {
+			newIndex = r.state.PresetIndex + 1
+			reason = fmt.Sprintf("RTP в окне низкий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
+		} else {
+			return false
+		}
+	} else {
+		return false
+	}
+
+	return r.applyAdjustment(newIndex, reason)
+}
+
+func (r *stateRepo) applyAdjustment(newIndex int, reason string) bool {
+	if newIndex == r.state.PresetIndex || newIndex < 0 || newIndex >= len(servModel.RtpPresets) {
+		return false
+	}
+
+	newPreset := servModel.RtpPresets[newIndex].Name
+
+	profit := r.state.TotalBet - r.state.TotalPayout
+
+	adjustment := repoModel.AdjustmentLog{
+		Timestamp: time.Now(),
+		NewPreset: newPreset,
+		Reason:    reason,
+		WindowRTP: r.state.WindowRTP,
+		Profit:    profit,
+	}
+	r.state.Adjustments = append(r.state.Adjustments, adjustment)
+
+	r.state.PresetIndex = newIndex
+
+	return true
 }

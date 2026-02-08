@@ -141,30 +141,31 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	if err != nil {
 		return nil, errors.New("failed to update stats")
 	}
+	// АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА
+	s.lineStatsRepo.SmartAutoAdjust()
+
 	return res, nil
 }
 
 // SpinOnce выполняет один спин (возвращает единый SpinResult)
 func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset, countFreeSpins int) (*model.SpinResult, error) {
-	board, err := s.GenerateBoard(countFreeSpins, cfg.WildChance(idx), cfg.SymbolWeights(idx))
-	if err != nil {
-		return nil, err
-	}
+	// Генерация игрового поля
+	board := s.GenerateBoard(preset)
 
-	// count scatters
-	scatters := 0
+	// Подсчет симолов бонуски "B" на игровом поле
+	bonusSymbolCount := 0
 	for r := 0; r < reels; r++ {
 		for c := 0; c < rows; c++ {
 			if board[r][c] == "B" {
-				scatters++
+				bonusSymbolCount++
 			}
 		}
 	}
 
-	// scatter payout
+	// Выплата за символы бонуски (если 3 и более) — по таблице выплат для символа "B"
 	var scatterPayout int
-	if scatters > 0 {
-		if val, ok := servModel.PayoutTable["B"][scatters]; ok {
+	if bonusSymbolCount >= 2 {
+		if val, ok := servModel.PayoutTable["B"][bonusSymbolCount]; ok {
 			scatterPayout = val * spinReq.Bet / 100
 		}
 	}
@@ -176,87 +177,88 @@ func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset, coun
 		lineTotal += w.Payout
 	}
 
+	// Общая выплата за спин (линии + бонуска) с учетом максимальной выплаты
 	total := s.ApplyMaxPayout(lineTotal+scatterPayout, spinReq.Bet, maxPayoutMultiplier)
 
-	awarded := 0
-	if scatters >= 3 {
-		if v, ok := servModel.FreeSpinsScatter[scatters]; ok {
-			awarded = v
+	// Считает сколько дается фриспинов за символы бонуски (если 3 и более) — по таблице FreeSpinsScatter
+	awardedFreeSpins := 0
+	if bonusSymbolCount >= 3 {
+		if v, ok := servModel.FreeSpinsScatter[bonusSymbolCount]; ok {
+			awardedFreeSpins = v
 		}
 	}
 
 	return &model.SpinResult{
 		Board:            board,
 		LineWins:         lineWins,
-		ScatterCount:     scatters,
+		ScatterCount:     bonusSymbolCount,
 		ScatterPayout:    scatterPayout,
-		AwardedFreeSpins: awarded,
+		AwardedFreeSpins: awardedFreeSpins,
 		TotalPayout:      total,
 		Balance:          0,
 	}, nil
 }
 
 // GenerateBoard генерирует игровое поле матрицы 5x3
-func (s *serv) GenerateBoard(countFreeSpins int, wildChance float64, symbolWeights map[string]int) ([5][3]string, error) {
+func (s *serv) GenerateBoard(preset servModel.RTPPreset) [5][3]string {
 	var board [5][3]string
-
-	// Добавляем вайлды только на центральные 3 барабана (индексы 1,2,3)
-	wildReels := map[int]bool{}
-	if countFreeSpins > 0 {
-		// ГАРАНТИРОВАННО хотя бы один Wild каждый спин бонуски
-		guaranteedReel := 1 + rand.Intn(3) // 1, 2 или 3 → барабаны 2,3,4
-		wildReels[guaranteedReel] = true
-		// Остальные два барабана могут тоже стать Wild с шансом 6%
-		for reel := 1; reel <= 3; reel++ {
-			if reel != guaranteedReel && rand.Float64() < wildChance {
-				wildReels[reel] = true
-			}
-		}
-	} else { // Обычная игра — обычный шанс 6% на каждый центральный барабан
-		for reel := 1; reel <= 3; reel++ {
-			if rand.Float64() < wildChance {
-				wildReels[reel] = true
-			}
-		}
-	}
-
-	// Отслеживаем, уже выпал ли скаттер на этом барабане
-	hasScatter := make([]bool, reels) // false по умолчанию
-
-	// Заполняем остальное случайными символами
 	for r := 0; r < reels; r++ {
-		for row := 0; row < rows; row++ {
-			if wildReels[r] {
-				board[r][row] = "W"
-				continue
+		// Получаем веса символов для текущего барабана из пресета
+		reelProbs := preset.Probabilities[r]
+
+		// Если на верхнем символе выпало "W" на барабанах 2, 3 или 4, то заполняем весь барабан "X"
+		if r == 1 || r == 2 || r == 3 {
+			for row := 0; row < 3; row++ {
+				symbol := getSymbolFromProbs(reelProbs)
+				if symbol == "W" {
+					board[r][0], board[r][1], board[r][2] = "W", "W", "W"
+					break
+				}
+				board[r][row] = symbol
+			}
+		} else {
+			// Для остальных барабанов (первого и последнего) просто заполняем по весам
+			for row := 0; row < 3; row++ {
+				board[r][row] = getSymbolFromProbs(reelProbs)
 			}
 
-			var sym string
-			if hasScatter[r] {
-				// На этом барабане уже есть скаттер → больше нельзя
-				sym = s.RandomWeightedNoScatter(symbolWeights)
-			} else {
-				// Обычный ролл, скаттер ещё разрешён
-				sym = s.RandomWeighted(symbolWeights)
-			}
+		}
 
-			board[r][row] = sym
+	}
+	return board
+}
 
-			// Если только что выпал скаттер — помечаем барабан
-			if sym == "B" {
-				hasScatter[r] = true
-			}
+// Выбор символа на основе вероятностей
+func getSymbolFromProbs(probs map[string]int) string {
+	num := rand.Intn(100) + 1
+	cumulative := 0
+
+	for sym, prob := range probs {
+		cumulative += prob
+		if num <= cumulative {
+			return sym
 		}
 	}
-	return board, nil
+
+	maxProb := 0
+	var maxSym string
+	for sym, prob := range probs {
+		if prob > maxProb {
+			maxProb = prob
+			maxSym = sym
+		}
+	}
+	return maxSym
 }
 
 // EvaluateLines выполняет оценку выигрышных линий
 func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutTable map[string]map[int]int) []model.LineWin {
+	// Массив для хранения выигрышных линий
 	var wins []model.LineWin
+
 	for i, line := range servModel.PlayLines {
 		symbols := make([]string, reels)
-		for r := 0; r < 5; r++ {
+		for r := 0; r < reels; r++ {
 			symbols[r] = board[r][line[r]]
 		}
 
@@ -295,6 +297,7 @@ func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutT
 			}
 		}
 
+		// Если количество совпадений больше или равно минимальному, то проверяем выплату
 		if count >= minCount {
 			if payTable, ok := payoutTable[base]; ok {
 				if val, ok := payTable[count]; ok {
@@ -310,68 +313,6 @@ func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutT
 		}
 	}
 	return wins
-}
-
-// RandomWeighted выполняет взвешенный случайный выбор символа
-func (s *serv) RandomWeighted(symbolWeights map[string]int) string {
-	total := 0
-	for _, w := range symbolWeights {
-		total += w
-	}
-	if total <= 0 {
-		for s := range symbolWeights {
-			return s
-		}
-		return ""
-	}
-	r := rand.Intn(total)
-	for s, w := range symbolWeights {
-		if r < w {
-			return s
-		}
-		r -= w
-	}
-	for s := range symbolWeights {
-		return s
-	}
-	return ""
-}
-
-// RandomWeightedNoScatter — выбирает символ по весам, но полностью исключает скаттер "B"
-func (s *serv) RandomWeightedNoScatter(symbolWeights map[string]int) string {
-	total := 0
-	for sym, w := range symbolWeights {
-		if sym != "B" { // полностью игнорируем скаттер
-			total += w
-		}
-	}
-	if total <= 0 {
-		for sym := range symbolWeights {
-			if sym != "B" {
-				return sym
-			}
-		}
-		return ""
-	}
-	r := rand.Intn(total)
-	current := 0
-	for sym, w := range symbolWeights {
-		if sym == "B" {
-			continue
-		}
-		if r < current+w {
-			return sym
-		}
-		current += w
-	}
-
-	// fallback
-	for sym := range symbolWeights {
-		if sym != "B" {
-			return sym
-		}
-	}
-	return ""
 }
 
 // ApplyMaxPayout применяет лимит по максимальному выигрышу
