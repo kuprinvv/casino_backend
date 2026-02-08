@@ -89,7 +89,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 
 		// КЛЮЧЕВОЙ ВЫЗОВ
 		// Делаем спин (передаём countFreeSpins как параметр)
-		res, err = s.SpinOnce(spinReq, presetCfg, countFreeSpins)
+		res, err = s.SpinOnce(spinReq, presetCfg)
 		if err != nil {
 			return err
 		}
@@ -137,10 +137,8 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	}
 
 	// Обновляем статистику
-	err = s.lineStatsRepo.UpdateState(float64(spinReq.Bet), float64(res.TotalPayout))
-	if err != nil {
-		return nil, errors.New("failed to update stats")
-	}
+	s.lineStatsRepo.UpdateState(float64(spinReq.Bet), float64(res.TotalPayout))
+
 	// АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА
 	s.lineStatsRepo.SmartAutoAdjust()
 
@@ -148,7 +146,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 }
 
 // SpinOnce выполняет один спин (возвращает единый SpinResult)
-func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset, countFreeSpins int) (*model.SpinResult, error) {
+func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset) (*model.SpinResult, error) {
 	// Генерация игрового поля
 	board := s.GenerateBoard(preset)
 

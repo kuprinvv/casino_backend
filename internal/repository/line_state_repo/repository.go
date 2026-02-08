@@ -10,14 +10,28 @@ import (
 )
 
 // Реализация репозитория для хранения состояния казино
-type stateRepo struct {
+type StateRepo struct {
 	mtx   sync.RWMutex
 	state repoModel.CasinoState
 }
 
 // NewLineStatsRepository Конструктор для создания нового репозитория с начальным состоянием
-func NewLineStatsRepository(initialState repoModel.CasinoState) *stateRepo {
-	return &stateRepo{
+func NewLineStatsRepository() *StateRepo {
+	initialState := repoModel.CasinoState{
+		TotalSpins:         0,
+		TotalBet:           0,
+		TotalPayout:        0,
+		CurrentRTP:         100.0,
+		TargetRTP:          95.0, // Можно сделать настраиваемым
+		PresetIndex:        0,
+		Adjustments:        make([]repoModel.AdjustmentLog, 0),
+		EmergencyMode:      false,
+		EmergencyDirection: "",
+		SpinWindow:         make([]repoModel.SpinResult, 0),
+		WindowRTP:          0,
+		WindowSize:         3000,
+	}
+	return &StateRepo{
 		state: initialState,
 	}
 }
@@ -25,14 +39,14 @@ func NewLineStatsRepository(initialState repoModel.CasinoState) *stateRepo {
 // CasinoState Получение текущего состояния казино
 // Является геттером для структуры состояния казино
 // Возвращает копию структуры CasinoState
-func (r *stateRepo) CasinoState() repoModel.CasinoState {
+func (r *StateRepo) CasinoState() repoModel.CasinoState {
 	r.mtx.RLock()
 	defer r.mtx.RUnlock()
 	return r.state
 }
 
 // UpdateState Обновление состояния казино после спина
-func (r *stateRepo) UpdateState(bet, payout float64) {
+func (r *StateRepo) UpdateState(bet, payout float64) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
@@ -74,7 +88,7 @@ func (r *stateRepo) UpdateState(bet, payout float64) {
 }
 
 // SmartAutoAdjust УМНАЯ АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА RTP
-func (r *stateRepo) SmartAutoAdjust() bool {
+func (r *StateRepo) SmartAutoAdjust() bool {
 	if r.state.TotalSpins%50 == 0 && r.state.TotalSpins > 1000 {
 		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
 		if r.emergencyCheck() {
@@ -90,7 +104,7 @@ func (r *stateRepo) SmartAutoAdjust() bool {
 
 // Экстренная проверка.
 // Если RTP в окне отклоняется от целевого более чем на 20% - включаем экстренный режим
-func (r *stateRepo) emergencyCheck() bool {
+func (r *StateRepo) emergencyCheck() bool {
 	if len(r.state.SpinWindow) < 1000 {
 		return false
 	}
@@ -117,7 +131,7 @@ func (r *stateRepo) emergencyCheck() bool {
 
 // Применение экстренной корректировки
 // Если RTP слишком высокий - понижаем, если слишком низкий - повышаем
-func (r *stateRepo) applyEmergencyAdjustment() bool {
+func (r *StateRepo) applyEmergencyAdjustment() bool {
 	adjustmentReason := "Экстренная корректировка"
 
 	var newIndex int
@@ -141,7 +155,7 @@ func (r *stateRepo) applyEmergencyAdjustment() bool {
 }
 
 // Стандартная проверка
-func (r *stateRepo) standardCheck() bool {
+func (r *StateRepo) standardCheck() bool {
 	if len(r.state.SpinWindow) < 1000 {
 		return false
 	}
@@ -162,7 +176,7 @@ func (r *stateRepo) standardCheck() bool {
 }
 
 // Применение стандартной корректировки
-func (r *stateRepo) applyStandardAdjustment() bool {
+func (r *StateRepo) applyStandardAdjustment() bool {
 	windowDiff := r.state.WindowRTP - r.state.TargetRTP
 	var newIndex int
 	var reason string
@@ -188,7 +202,7 @@ func (r *stateRepo) applyStandardAdjustment() bool {
 	return r.applyAdjustment(newIndex, reason)
 }
 
-func (r *stateRepo) applyAdjustment(newIndex int, reason string) bool {
+func (r *StateRepo) applyAdjustment(newIndex int, reason string) bool {
 	if newIndex == r.state.PresetIndex || newIndex < 0 || newIndex >= len(servModel.RtpPresets) {
 		return false
 	}

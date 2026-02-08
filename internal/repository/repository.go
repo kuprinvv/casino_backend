@@ -41,7 +41,7 @@ type UserRepository interface {
 
 type LineStatsRepository interface {
 	CasinoState() repoModel.CasinoState
-	UpdateState(bet, payout float64) error
+	UpdateState(bet, payout float64)
 	SmartAutoAdjust() bool
 }
 
