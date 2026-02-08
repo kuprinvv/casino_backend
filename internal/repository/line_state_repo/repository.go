@@ -3,7 +3,7 @@ package line_state_repo
 import (
 	repoModel "casino_backend/internal/repository/line_state_repo/model"
 	servModel "casino_backend/internal/service/line/model"
-	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -119,6 +119,7 @@ func (r *StateRepo) emergencyCheck() bool {
 		} else {
 			r.state.EmergencyDirection = "low"
 		}
+		log.Println("Экстренная ситуация: отклонение > 20%", absoluteDiff)
 		return true
 	}
 	// Выходим из экстренного режима
@@ -138,14 +139,14 @@ func (r *StateRepo) applyEmergencyAdjustment() bool {
 	if r.state.EmergencyDirection == "high" {
 		if r.state.PresetIndex > 0 {
 			newIndex = r.state.PresetIndex - 1
-			adjustmentReason = fmt.Sprintf("%s (RTP слишком высокий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
+			log.Printf("%s (RTP слишком высокий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
 		} else {
 			return false
 		}
 	} else {
 		if r.state.PresetIndex < len(servModel.RtpPresets)-1 {
 			newIndex = r.state.PresetIndex + 1
-			adjustmentReason = fmt.Sprintf("%s (RTP слишком низкий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
+			log.Printf("%s (RTP слишком низкий: %.1f%%)", adjustmentReason, r.state.WindowRTP)
 		} else {
 			return false
 		}
@@ -184,14 +185,14 @@ func (r *StateRepo) applyStandardAdjustment() bool {
 	if windowDiff > 5.0 {
 		if r.state.PresetIndex > 0 {
 			newIndex = r.state.PresetIndex - 1
-			reason = fmt.Sprintf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
+			log.Printf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
 		}
 	} else if windowDiff < -5.0 {
 		if r.state.PresetIndex < len(servModel.RtpPresets)-1 {
 			newIndex = r.state.PresetIndex + 1
-			reason = fmt.Sprintf("RTP в окне низкий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
+			log.Printf("RTP в окне низкий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
 		}
