@@ -11,9 +11,9 @@ import (
 
 const (
 	// countSpinsToSwap Количество спинов, после которого начинаем проверять необходимость корректировки
-	countSpinsToSwap = 15
+	countSpinsToSwap = 5
 	// periodSpinsToCheck Периодичность проверки (каждые N спинов)
-	periodSpinsToCheck = 10
+	periodSpinsToCheck = 1
 	// maxAllowedRTPDeviation Максимально допустимое отклонение RTP в окне от целевого, при котором мы считаем, что нужно корректировать
 	maxAllowedRTPDeviation = 5.0 // процентные пункты
 	// критическое отклонение RTP для активации аварийного режима
@@ -36,7 +36,7 @@ func NewLineStatsRepository() *StateRepo {
 		TotalPayout:        0,
 		CurrentRTP:         95.0,
 		TargetRTP:          95.0, // Можно сделать настраиваемым
-		PresetIndex:        0,
+		PresetIndex:        5,
 		Adjustments:        make([]repoModel.AdjustmentLog, 0),
 		EmergencyMode:      false,
 		EmergencyDirection: "",
@@ -102,11 +102,14 @@ func (r *StateRepo) UpdateState(bet, payout float64) {
 
 // SmartAutoAdjust УМНАЯ АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА RTP
 func (r *StateRepo) SmartAutoAdjust() bool {
+	log.Println("ТЕКУЩЕЕ СОСТОЯНИЕ | ТЕКУЩИЙ РТП:", r.state.CurrentRTP, "| ИНДЕКС ПРЕСЕТА:", r.state.PresetIndex)
 	if r.state.TotalSpins%periodSpinsToCheck == 0 && r.state.TotalSpins > countSpinsToSwap {
+		log.Println("2. ЗАПУСК ПРОВЕРОК TotalSpins:", r.state.TotalSpins)
 		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
 		if r.emergencyCheck() {
 			return r.applyEmergencyAdjustment()
 		}
+		log.Println("3. ЗАПУСК ПРОВЕРОК standardCheck:")
 		// 2. СТАНДАРТНАЯ КОРРЕКТИРОВКА (отклонение > 5%)
 		if r.standardCheck() {
 			return r.applyStandardAdjustment()
@@ -118,14 +121,17 @@ func (r *StateRepo) SmartAutoAdjust() bool {
 // Экстренная проверка.
 // Если RTP в окне отклоняется от целевого более чем на 20% - включаем экстренный режим
 func (r *StateRepo) emergencyCheck() bool {
+	log.Println("ЗАПУСК emergencyCheck")
 	// Если у нас еще нет достаточного количества спинов для анализа - не делаем ничего
 	if len(r.state.SpinWindow) < countSpinsToSwap {
+		log.Println("emergencyCheck НЕТ достаточного количества спинов для анализа SpinWindow:", r.state.SpinWindow)
 		return false
 	}
 	absoluteDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
 
 	// Экстренная ситуация: отклонение > 20%
 	if absoluteDiff > criticalRTPDeviation {
+		log.Println("emergencyCheck Экстренная ситуация: отклонение > 20%")
 		r.state.EmergencyMode = true
 
 		if r.state.WindowRTP > r.state.TargetRTP {
@@ -148,7 +154,7 @@ func (r *StateRepo) emergencyCheck() bool {
 // Если RTP слишком высокий - понижаем, если слишком низкий - повышаем
 func (r *StateRepo) applyEmergencyAdjustment() bool {
 	adjustmentReason := "Экстренная корректировка"
-
+	log.Println("applyEmergencyAdjustment ЗАПУСК")
 	var newIndex int
 	if r.state.EmergencyDirection == "high" {
 		if r.state.PresetIndex > 0 {
@@ -165,7 +171,6 @@ func (r *StateRepo) applyEmergencyAdjustment() bool {
 			return false
 		}
 	}
-
 	return r.applyAdjustment(newIndex, adjustmentReason)
 }
 
@@ -174,13 +179,16 @@ func (r *StateRepo) standardCheck() bool {
 	if len(r.state.SpinWindow) < countSpinsToSwap {
 		return false
 	}
+	log.Println("standardCheck ЗАПУСК")
 
+	log.Println("Проверка r.state.EmergencyMode: ", r.state.EmergencyMode)
 	if r.state.EmergencyMode {
 		return false
 	}
 
 	windowDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
 
+	log.Println("standardCheck проверка windowDiff > maxAllowedRTPDeviation", windowDiff, " > ", maxAllowedRTPDeviation)
 	if windowDiff > maxAllowedRTPDeviation {
 		if r.state.TotalSpins > countSpinsToSwap {
 			return true
@@ -192,13 +200,16 @@ func (r *StateRepo) standardCheck() bool {
 
 // Применение стандартной корректировки
 func (r *StateRepo) applyStandardAdjustment() bool {
+	log.Println("applyStandardAdjustment ЗАПУСК Применение стандартной корректировки")
 	windowDiff := r.state.WindowRTP - r.state.TargetRTP
 	var newIndex int
 	var reason string
 
+	log.Println("applyStandardAdjustment ПРОВЕРКА на смену ПРЕСЕТА")
 	if windowDiff > 5.0 {
 		if r.state.PresetIndex > 0 {
 			newIndex = r.state.PresetIndex - 1
+			log.Println("applyStandardAdjustment МЕНЯЕМ ИНДЕКС ПРЕСЕТА: ", newIndex)
 			log.Printf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
