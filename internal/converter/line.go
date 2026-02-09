@@ -16,7 +16,6 @@ func ToLineSpinResponse(resp model.SpinResult) line.LineSpinResponse {
 		Board:            resp.Board,
 		LineWins:         toLineWins(resp.LineWins),
 		ScatterCount:     resp.ScatterCount,
-		ScatterPayout:    resp.ScatterPayout,
 		AwardedFreeSpins: resp.AwardedFreeSpins,
 		TotalPayout:      resp.TotalPayout,
 		Balance:          resp.Balance,

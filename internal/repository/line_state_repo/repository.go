@@ -102,16 +102,16 @@ func (r *StateRepo) UpdateState(bet, payout float64) {
 
 // SmartAutoAdjust УМНАЯ АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА RTP
 func (r *StateRepo) SmartAutoAdjust() bool {
-	log.Println("ТЕКУЩЕЕ СОСТОЯНИЕ | ТЕКУЩИЙ РТП:", r.state.CurrentRTP, "| ИНДЕКС ПРЕСЕТА:", r.state.PresetIndex)
 	if r.state.TotalSpins%periodSpinsToCheck == 0 && r.state.TotalSpins > countSpinsToSwap {
-		log.Println("2. ЗАПУСК ПРОВЕРОК TotalSpins:", r.state.TotalSpins)
 		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
 		if r.emergencyCheck() {
+			// Если мы вошли в экстренный режим - применяем экстренную корректировку
 			return r.applyEmergencyAdjustment()
 		}
-		log.Println("3. ЗАПУСК ПРОВЕРОК standardCheck:")
 		// 2. СТАНДАРТНАЯ КОРРЕКТИРОВКА (отклонение > 5%)
 		if r.standardCheck() {
+			// Если мы не в экстренном режиме,
+			// но RTP в окне отклоняется от целевого более чем на 5% - применяем стандартную корректировку
 			return r.applyStandardAdjustment()
 		}
 	}
@@ -121,28 +121,26 @@ func (r *StateRepo) SmartAutoAdjust() bool {
 // Экстренная проверка.
 // Если RTP в окне отклоняется от целевого более чем на 20% - включаем экстренный режим
 func (r *StateRepo) emergencyCheck() bool {
-	log.Println("ЗАПУСК emergencyCheck")
 	// Если у нас еще нет достаточного количества спинов для анализа - не делаем ничего
 	if len(r.state.SpinWindow) < countSpinsToSwap {
-		log.Println("emergencyCheck НЕТ достаточного количества спинов для анализа SpinWindow:", r.state.SpinWindow)
 		return false
 	}
+	// Вычисляем абсолютное отклонение RTP в окне от целевого
 	absoluteDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
 
 	// Экстренная ситуация: отклонение > 20%
 	if absoluteDiff > criticalRTPDeviation {
-		log.Println("emergencyCheck Экстренная ситуация: отклонение > 20%")
 		r.state.EmergencyMode = true
-
+		// Определяем направление корректировки: если RTP слишком высокий - понижаем, если слишком низкий - повышаем
 		if r.state.WindowRTP > r.state.TargetRTP {
 			r.state.EmergencyDirection = "high"
 		} else {
 			r.state.EmergencyDirection = "low"
 		}
-		log.Println("Экстренная ситуация: отклонение > 20%", absoluteDiff)
 		return true
 	}
 	// Выходим из экстренного режима
+	// Если мы в экстренном режиме, но RTP уже вернулся ближе к целевому (отклонение < 10%) - выключаем экстренный режим
 	if r.state.EmergencyMode && absoluteDiff < normalRTPDeviation {
 		r.state.EmergencyMode = false
 		r.state.EmergencyDirection = ""
@@ -154,7 +152,6 @@ func (r *StateRepo) emergencyCheck() bool {
 // Если RTP слишком высокий - понижаем, если слишком низкий - повышаем
 func (r *StateRepo) applyEmergencyAdjustment() bool {
 	adjustmentReason := "Экстренная корректировка"
-	log.Println("applyEmergencyAdjustment ЗАПУСК")
 	var newIndex int
 	if r.state.EmergencyDirection == "high" {
 		if r.state.PresetIndex > 0 {
@@ -179,16 +176,13 @@ func (r *StateRepo) standardCheck() bool {
 	if len(r.state.SpinWindow) < countSpinsToSwap {
 		return false
 	}
-	log.Println("standardCheck ЗАПУСК")
 
-	log.Println("Проверка r.state.EmergencyMode: ", r.state.EmergencyMode)
 	if r.state.EmergencyMode {
 		return false
 	}
 
 	windowDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
 
-	log.Println("standardCheck проверка windowDiff > maxAllowedRTPDeviation", windowDiff, " > ", maxAllowedRTPDeviation)
 	if windowDiff > maxAllowedRTPDeviation {
 		if r.state.TotalSpins > countSpinsToSwap {
 			return true
@@ -200,16 +194,13 @@ func (r *StateRepo) standardCheck() bool {
 
 // Применение стандартной корректировки
 func (r *StateRepo) applyStandardAdjustment() bool {
-	log.Println("applyStandardAdjustment ЗАПУСК Применение стандартной корректировки")
 	windowDiff := r.state.WindowRTP - r.state.TargetRTP
 	var newIndex int
 	var reason string
 
-	log.Println("applyStandardAdjustment ПРОВЕРКА на смену ПРЕСЕТА")
 	if windowDiff > 5.0 {
 		if r.state.PresetIndex > 0 {
 			newIndex = r.state.PresetIndex - 1
-			log.Println("applyStandardAdjustment МЕНЯЕМ ИНДЕКС ПРЕСЕТА: ", newIndex)
 			log.Printf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
@@ -228,6 +219,7 @@ func (r *StateRepo) applyStandardAdjustment() bool {
 	return r.applyAdjustment(newIndex, reason)
 }
 
+// Применение корректировки и логирование
 func (r *StateRepo) applyAdjustment(newIndex int, reason string) bool {
 	if newIndex == r.state.PresetIndex || newIndex < 0 || newIndex >= len(servModel.RtpPresets) {
 		return false

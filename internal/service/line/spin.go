@@ -6,6 +6,7 @@ import (
 	servModel "casino_backend/internal/service/line/model"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 )
@@ -153,48 +154,25 @@ func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset) (*mo
 	// Генерация игрового поля
 	board := s.GenerateBoard(preset)
 
-	// Подсчет симолов бонуски "B" на игровом поле
-	bonusSymbolCount := 0
-	for r := 0; r < reels; r++ {
-		for c := 0; c < rows; c++ {
-			if board[r][c] == "B" {
-				bonusSymbolCount++
-			}
-		}
-	}
+	// Подсчет символов бонуса "B" на игровом поле
+	bonusCount := s.bonusSymbolCount(board)
 
-	// Выплата за символы бонуски (если 3 и более) — по таблице выплат для символа "B"
-	var scatterPayout int
-	if bonusSymbolCount >= 2 {
-		if val, ok := servModel.PayoutTable["B"][bonusSymbolCount]; ok {
-			scatterPayout = val * spinReq.Bet / 100
-		}
-	}
+	// Выигрыши по линиям
+	lineWins := s.EvaluateLines(board, spinReq.Bet)
+	lineTotalPayout := s.TotalPayoutLines(lineWins)
 
-	// line wins
-	lineWins := s.EvaluateLines(board, spinReq, servModel.PayoutTable)
-	var lineTotal int
-	for _, w := range lineWins {
-		lineTotal += w.Payout
-	}
-
-	// Общая выплата за спин (линии + бонуска) с учетом максимальной выплаты
-	total := s.ApplyMaxPayout(lineTotal+scatterPayout, spinReq.Bet, maxPayoutMultiplier)
+	// Общая выплата за спин
+	total := s.ApplyMaxPayout(lineTotalPayout, spinReq.Bet, maxPayoutMultiplier)
 
 	// Считает сколько дается фриспинов за символы бонуски (если 3 и более) — по таблице FreeSpinsScatter
-	awardedFreeSpins := 0
-	if bonusSymbolCount >= 3 {
-		if v, ok := servModel.FreeSpinsScatter[bonusSymbolCount]; ok {
-			awardedFreeSpins = v
-		}
-	}
+	// Фриспины за бонус-символы
+	countFreeSpins := s.CountBonusSpin(bonusCount)
 
 	return &model.SpinResult{
 		Board:            board,
 		LineWins:         lineWins,
-		ScatterCount:     bonusSymbolCount,
-		ScatterPayout:    scatterPayout,
-		AwardedFreeSpins: awardedFreeSpins,
+		ScatterCount:     bonusCount,
+		AwardedFreeSpins: countFreeSpins,
 		TotalPayout:      total,
 		Balance:          0,
 	}, nil
@@ -204,27 +182,24 @@ func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset) (*mo
 func (s *serv) GenerateBoard(preset servModel.RTPPreset) [5][3]string {
 	var board [5][3]string
 	for r := 0; r < reels; r++ {
-		// Получаем веса символов для текущего барабана из пресета
+		// Выбор пресета для барабана
 		reelProbs := preset.Probabilities[r]
+		//
+		f_bonus := false
 
-		// Если на верхнем символе выпало "W" на барабанах 2, 3 или 4, то заполняем весь барабан "X"
-		if r == 1 || r == 2 || r == 3 {
-			// Генерируем один раз для всего барабана
-			symbol := getSymbolFromProbs(reelProbs)
-			if symbol == "W" {
+		for i := 0; i < rows; i++ {
+			symbol, _ := getSymbolFromProbs(reelProbs)
+			if (r == 1 || r == 2 || r == 3) && (symbol == "W") {
 				board[r][0], board[r][1], board[r][2] = "W", "W", "W"
-			} else {
-				// Иначе заполняем 3 независимых символа
-				board[r][0] = symbol
-				board[r][1] = getSymbolFromProbs(reelProbs)
-				board[r][2] = getSymbolFromProbs(reelProbs)
+				break
 			}
-		} else {
-			// Для остальных барабанов (первого и последнего) просто заполняем по весам
-			for row := 0; row < 3; row++ {
-				board[r][row] = getSymbolFromProbs(reelProbs)
+			if f_bonus && symbol == "B" {
+				symbol, _ = getSymbolFromProbs(reelProbs)
 			}
-
+			if symbol == "B" {
+				f_bonus = true
+			}
+			board[r][i] = symbol
 		}
 
 	}
@@ -232,45 +207,56 @@ func (s *serv) GenerateBoard(preset servModel.RTPPreset) [5][3]string {
 }
 
 // Выбор символа на основе вероятностей
-func getSymbolFromProbs(probs map[string]int) string {
+// Функции симуляции
+func getSymbolFromProbs(probs map[string]int) (string, error) {
+	total := 0
+	for _, prob := range probs {
+		total += prob
+	}
+
+	if total != 100 {
+		return "", fmt.Errorf("сумма вероятностей должна быть 100, got %d", total)
+	}
+
 	num := rand.Intn(100) + 1
 	cumulative := 0
 
 	for sym, prob := range probs {
 		cumulative += prob
 		if num <= cumulative {
-			return sym
+			return sym, nil
 		}
 	}
 
-	maxProb := 0
-	var maxSym string
-	for sym, prob := range probs {
-		if prob > maxProb {
-			maxProb = prob
-			maxSym = sym
+	return "", errors.New("не удалось выбрать символ")
+}
+
+// bonusSymbolCount подсчет колличества бонусных символов
+func (s *serv) bonusSymbolCount(board [5][3]string) int {
+	count := 0
+	for r := 0; r < 5; r++ {
+		for c := 0; c < 3; c++ {
+			if board[r][c] == "B" {
+				count++
+			}
 		}
 	}
-	return maxSym
+	return count
 }
 
 // EvaluateLines выполняет оценку выигрышных линий
-func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutTable map[string]map[int]int) []model.LineWin {
+func (s *serv) EvaluateLines(board [5][3]string, bet int) []model.LineWin {
 	// Массив для хранения выигрышных линий
 	var wins []model.LineWin
 
 	for i, line := range servModel.PlayLines {
+		// Заполняем по линиям
 		symbols := make([]string, reels)
 		for r := 0; r < reels; r++ {
 			symbols[r] = board[r][line[r]]
 		}
 
-		// Пропускаем линии, где первый символ — скаттер
-		if symbols[0] == "B" {
-			continue
-		}
-
-		// Находим базовый символ (не W и не B)
+		// Находим базовый символ (не W и не B) !!!
 		var base string
 		for _, sym := range symbols {
 			if sym != "W" && sym != "B" {
@@ -294,7 +280,7 @@ func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutT
 
 		// Определяем минимальное количество символов для выплаты
 		minCount := 3
-		for c := range payoutTable[base] {
+		for c := range servModel.PayoutTable[base] {
 			if c < minCount {
 				minCount = c // обновится до 2 для S8
 			}
@@ -302,13 +288,13 @@ func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutT
 
 		// Если количество совпадений больше или равно минимальному, то проверяем выплату
 		if count >= minCount {
-			if payTable, ok := payoutTable[base]; ok {
+			if payTable, ok := servModel.PayoutTable[base]; ok {
 				if val, ok := payTable[count]; ok {
 					win := model.LineWin{
 						Line:   i + 1,
 						Symbol: base,
 						Count:  count,
-						Payout: val * spinReq.Bet / 100,
+						Payout: val * bet / 100,
 					}
 					wins = append(wins, win)
 				}
@@ -318,6 +304,15 @@ func (s *serv) EvaluateLines(board [5][3]string, spinReq model.LineSpin, payoutT
 	return wins
 }
 
+// TotalPayoutLines подсчет выплаты за линии
+func (s *serv) TotalPayoutLines(lineWins []model.LineWin) int {
+	lineTotal := 0
+	for _, w := range lineWins {
+		lineTotal += w.Payout
+	}
+	return lineTotal
+}
+
 // ApplyMaxPayout применяет лимит по максимальному выигрышу
 func (s *serv) ApplyMaxPayout(amount, bet, maxMult int) int {
 	maxPay := maxMult * bet
@@ -325,4 +320,15 @@ func (s *serv) ApplyMaxPayout(amount, bet, maxMult int) int {
 		return maxPay
 	}
 	return amount
+}
+
+// CountBonusSpin считает сколько дается фриспинов за символы бонуски
+func (s *serv) CountBonusSpin(bonusCount int) int {
+	awardedFreeSpins := 0
+	if bonusCount >= 3 {
+		if v, ok := servModel.FreeSpinsScatter[bonusCount]; ok {
+			awardedFreeSpins = v
+		}
+	}
+	return awardedFreeSpins
 }
