@@ -13,7 +13,7 @@ import (
 	"casino_backend/internal/repository/cascade_repo"
 	"casino_backend/internal/repository/cascade_stats_repo"
 	"casino_backend/internal/repository/line_repo"
-	"casino_backend/internal/repository/line_stats_repo"
+	"casino_backend/internal/repository/line_state_repo"
 	"casino_backend/internal/repository/user_repo"
 	"casino_backend/internal/service"
 	"casino_backend/internal/service/auth"
@@ -210,7 +210,7 @@ func (sp *ServiceProvider) LineRepository(ctx context.Context) repository.LineRe
 
 func (sp *ServiceProvider) LineStatsRepository() repository.LineStatsRepository {
 	if sp.lineStatsRepo == nil {
-		sp.lineStatsRepo = line_stats_repo.NewLineStatsRepository()
+		sp.lineStatsRepo = line_state_repo.NewLineStatsRepository()
 	}
 	return sp.lineStatsRepo
 }
@@ -218,7 +218,6 @@ func (sp *ServiceProvider) LineStatsRepository() repository.LineStatsRepository 
 func (sp *ServiceProvider) LineService(ctx context.Context) service.LineService {
 	if sp.lineServ == nil {
 		sp.lineServ = line.NewLineService(
-			sp.LineCfg(),
 			sp.LineRepository(ctx),
 			sp.UserRepo(ctx),
 			sp.LineStatsRepository(),

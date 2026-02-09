@@ -8,7 +8,6 @@ type SpinResult struct {
 	Board            [5][3]string
 	LineWins         []LineWin
 	ScatterCount     int
-	ScatterPayout    int
 	AwardedFreeSpins int
 	TotalPayout      int
 	Balance          int

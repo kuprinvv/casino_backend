@@ -2,6 +2,7 @@ package repository
 
 import (
 	"casino_backend/internal/model"
+	repoModel "casino_backend/internal/repository/line_state_repo/model"
 	"context"
 )
 
@@ -39,8 +40,9 @@ type UserRepository interface {
 }
 
 type LineStatsRepository interface {
-	GetConfigIndex() (int, error)
-	UpdateStats(totalPayout int, bet int) error
+	CasinoState() repoModel.CasinoState
+	UpdateState(bet, payout float64)
+	SmartAutoAdjust() bool
 }
 
 type CascadeStatsRepository interface {
