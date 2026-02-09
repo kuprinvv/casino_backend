@@ -106,15 +106,21 @@ func (r *StateRepo) SmartAutoAdjust() bool {
 		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
 		if r.emergencyCheck() {
 			// Если мы вошли в экстренный режим - применяем экстренную корректировку
+			log.Printf("[ЭКСТРЕННАЯ ПРОВЕРКА] TotalSpins: %s TotalBet: %s TotalPayout: %s CurrentRTP: %s TargetRTP: %s",
+				r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 			return r.applyEmergencyAdjustment()
 		}
 		// 2. СТАНДАРТНАЯ КОРРЕКТИРОВКА (отклонение > 5%)
 		if r.standardCheck() {
+			log.Printf("[СТАНДАРТНАЯ КОРРЕКТИРОВКА] TotalSpins: %s TotalBet: %s TotalPayout: %s CurrentRTP: %s TargetRTP: %s",
+				r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 			// Если мы не в экстренном режиме,
 			// но RTP в окне отклоняется от целевого более чем на 5% - применяем стандартную корректировку
 			return r.applyStandardAdjustment()
 		}
 	}
+	log.Printf("[ОТКЛОНЕНИЙ НЕТ] TotalSpins: %s TotalBet: %s TotalPayout: %s CurrentRTP: %s TargetRTP: %s",
+		r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 	return false
 }
 
