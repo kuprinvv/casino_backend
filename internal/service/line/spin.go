@@ -141,10 +141,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 	s.lineStatsRepo.UpdateState(float64(spinReq.Bet), float64(res.TotalPayout))
 
 	// АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА
-	log.Println("СПИН СТАВКА:", spinReq.Bet, "ВЫИГРЫШ: ", res.TotalPayout)
-	log.Println("ВЫЗОВ АВТОМАТИЧЕСКОЙ РЕГУЛИРОВКИ")
 	s.lineStatsRepo.SmartAutoAdjust()
-	log.Println("КОНЕЦ АВТОМАТИЧЕСКОЙ РЕГУЛИРОВКИ")
 
 	return res, nil
 }

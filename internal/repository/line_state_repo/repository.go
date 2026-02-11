@@ -11,15 +11,15 @@ import (
 
 const (
 	// countSpinsToSwap Количество спинов, после которого начинаем проверять необходимость корректировки
-	countSpinsToSwap = 5
+	countSpinsToSwap = 1
 	// periodSpinsToCheck Периодичность проверки (каждые N спинов)
-	periodSpinsToCheck = 1
+	periodSpinsToCheck = 25
 	// maxAllowedRTPDeviation Максимально допустимое отклонение RTP в окне от целевого, при котором мы считаем, что нужно корректировать
-	maxAllowedRTPDeviation = 5.0 // процентные пункты
+	maxAllowedRTPDeviation = 5 // процентные пункты
 	// критическое отклонение RTP для активации аварийного режима
-	criticalRTPDeviation = 20.0
+	criticalRTPDeviation = 10.0
 	// нормальное отклонение RTP для деактивации аварийного режима
-	normalRTPDeviation = 10.0
+	normalRTPDeviation = 5
 )
 
 // Реализация репозитория для хранения состояния казино
@@ -36,13 +36,13 @@ func NewLineStatsRepository() *StateRepo {
 		TotalPayout:        0,
 		CurrentRTP:         95.0,
 		TargetRTP:          95.0, // Можно сделать настраиваемым
-		PresetIndex:        0,
+		PresetIndex:        2,
 		Adjustments:        make([]repoModel.AdjustmentLog, 0),
 		EmergencyMode:      false,
 		EmergencyDirection: "",
 		SpinWindow:         make([]repoModel.SpinResult, 0),
 		WindowRTP:          0,
-		WindowSize:         10,
+		WindowSize:         500,
 	}
 	return &StateRepo{
 		state: initialState,
@@ -102,25 +102,22 @@ func (r *StateRepo) UpdateState(bet, payout float64) {
 
 // SmartAutoAdjust УМНАЯ АВТОМАТИЧЕСКАЯ РЕГУЛИРОВКА RTP
 func (r *StateRepo) SmartAutoAdjust() bool {
+	r.mtx.RLock()
+	defer r.mtx.RUnlock()
+
+	//log.Println("ТЕКУЩИЙ RTP ", r.state.CurrentRTP, " ПРЕСЕТ ИНДЕКС ", r.state.PresetIndex, " РТП ОКНА ", r.state.WindowRTP)
 	if r.state.TotalSpins%periodSpinsToCheck == 0 && r.state.TotalSpins > countSpinsToSwap {
 		// 1. ЭКСТРЕННАЯ ПРОВЕРКА (отклонение > 20%)
 		if r.emergencyCheck() {
-			// Если мы вошли в экстренный режим - применяем экстренную корректировку
-			log.Printf("[ЭКСТРЕННАЯ ПРОВЕРКА] TotalSpins: %v TotalBet: %v TotalPayout: %v CurrentRTP: %v TargetRTP: %v",
-				r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 			return r.applyEmergencyAdjustment()
 		}
 		// 2. СТАНДАРТНАЯ КОРРЕКТИРОВКА (отклонение > 5%)
 		if r.standardCheck() {
-			log.Printf("[СТАНДАРТНАЯ КОРРЕКТИРОВКА] TotalSpins: %v TotalBet: %v TotalPayout: %v CurrentRTP: %v TargetRTP: %v",
-				r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 			// Если мы не в экстренном режиме,
 			// но RTP в окне отклоняется от целевого более чем на 5% - применяем стандартную корректировку
 			return r.applyStandardAdjustment()
 		}
 	}
-	log.Printf("[ОТКЛОНЕНИЙ НЕТ] TotalSpins: %v TotalBet: %v TotalPayout: %v CurrentRTP: %v TargetRTP: %v",
-		r.state.TotalSpins, r.state.TotalBet, r.state.TotalPayout, r.state.CurrentRTP, r.state.TargetRTP)
 	return false
 }
 
@@ -128,13 +125,13 @@ func (r *StateRepo) SmartAutoAdjust() bool {
 // Если RTP в окне отклоняется от целевого более чем на 20% - включаем экстренный режим
 func (r *StateRepo) emergencyCheck() bool {
 	// Если у нас еще нет достаточного количества спинов для анализа - не делаем ничего
-	if len(r.state.SpinWindow) < countSpinsToSwap {
+	if r.state.TotalSpins < countSpinsToSwap {
 		return false
 	}
 	// Вычисляем абсолютное отклонение RTP в окне от целевого
 	absoluteDiff := math.Abs(r.state.WindowRTP - r.state.TargetRTP)
 
-	// Экстренная ситуация: отклонение > 20%
+	// Экстренная ситуация: отклонение > criticalRTPDeviation
 	if absoluteDiff > criticalRTPDeviation {
 		r.state.EmergencyMode = true
 		// Определяем направление корректировки: если RTP слишком высокий - понижаем, если слишком низкий - повышаем
@@ -146,7 +143,7 @@ func (r *StateRepo) emergencyCheck() bool {
 		return true
 	}
 	// Выходим из экстренного режима
-	// Если мы в экстренном режиме, но RTP уже вернулся ближе к целевому (отклонение < 10%) - выключаем экстренный режим
+	// Если мы в экстренном режиме, но RTP уже вернулся ближе к целевому (отклонение < normalRTPDeviation) - выключаем экстренный режим
 	if r.state.EmergencyMode && absoluteDiff < normalRTPDeviation {
 		r.state.EmergencyMode = false
 		r.state.EmergencyDirection = ""
@@ -179,7 +176,7 @@ func (r *StateRepo) applyEmergencyAdjustment() bool {
 
 // Стандартная проверка
 func (r *StateRepo) standardCheck() bool {
-	if len(r.state.SpinWindow) < countSpinsToSwap {
+	if r.state.TotalSpins < countSpinsToSwap {
 		return false
 	}
 
@@ -204,17 +201,15 @@ func (r *StateRepo) applyStandardAdjustment() bool {
 	var newIndex int
 	var reason string
 
-	if windowDiff > 5.0 {
+	if windowDiff > maxAllowedRTPDeviation {
 		if r.state.PresetIndex > 0 {
 			newIndex = r.state.PresetIndex - 1
-			log.Printf("RTP в окне высокий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
 		}
-	} else if windowDiff < -5.0 {
+	} else if windowDiff < -maxAllowedRTPDeviation {
 		if r.state.PresetIndex < len(servModel.RtpPresets)-1 {
 			newIndex = r.state.PresetIndex + 1
-			log.Printf("RTP в окне низкий: %.1f%% (цель: %.1f%%)", r.state.WindowRTP, r.state.TargetRTP)
 		} else {
 			return false
 		}
@@ -231,6 +226,7 @@ func (r *StateRepo) applyAdjustment(newIndex int, reason string) bool {
 		return false
 	}
 	newPreset := servModel.RtpPresets[newIndex].Name
+	log.Println("[КОРЕКТИРОВКА ПРЕСЕТА] СТАРЫЙ ПРЕСЕТ>", r.state.CurrentRTP, " НОВЫЙ ПРЕСЕТ>", newPreset)
 	profit := r.state.TotalBet - r.state.TotalPayout
 
 	adjustment := repoModel.AdjustmentLog{
