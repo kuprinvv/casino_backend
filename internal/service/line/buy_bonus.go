@@ -20,6 +20,15 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 		return nil, errors.New("user id not found")
 	}
 
+	// Ограничение покупки бонуски если есть фриспины
+	countFreeSpins, err := s.repo.GetFreeSpinCount(ctx, userID)
+	if err != nil {
+		return nil, errors.New("error getting free spins")
+	}
+	if countFreeSpins > 0 {
+		return nil, errors.New("free spins are not empty")
+	}
+
 	// Получаем пресет весов символов исходя из статистики
 	preset := servModel.RtpPresets[s.lineStatsRepo.CasinoState().PresetIndex]
 
@@ -27,7 +36,7 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 	var res *model.BonusSpinResult
 
 	// Начало транзакции, где выполняется процесс бонусного спина.
-	err := s.txManager.Do(ctx, func(txCtx context.Context) error {
+	err = s.txManager.Do(ctx, func(txCtx context.Context) error {
 		// Получаем баланс пользователя
 		balance, err := s.userRepo.GetBalance(txCtx, userID)
 		if err != nil {
@@ -44,7 +53,7 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 		// Вычитаем из баланса цену бонуски
 		balance -= bonusPrice
 
-		spinRes, err := s.SpinBonus(bonusReq.Bet, preset)
+		spinRes, err := s.SpinOnce(bonusReq.Bet, preset, s.GenerateBonusBoard)
 		if err != nil {
 			return err
 		}
@@ -79,37 +88,7 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 	return res, err
 }
 
-// SpinBonus выполняет один спин (возвращает единый SpinResult)
-func (s *serv) SpinBonus(bet int, preset servModel.RTPPreset) (*model.SpinResult, error) {
-	// Генерация игрового поля
-	board := s.GenerateBonusBoard(preset)
-
-	// Подсчет символов бонуса "B" на игровом поле
-	bonusCount := s.bonusSymbolCount(board)
-
-	// Выигрыши по линиям
-	lineWins := s.EvaluateLines(board, bet)
-	lineTotalPayout := s.TotalPayoutLines(lineWins)
-
-	// Общая выплата за спин
-	total := s.ApplyMaxPayout(lineTotalPayout, bet, maxPayoutMultiplier)
-
-	// Считает сколько дается фриспинов за символы бонуски (если 3 и более) — по таблице FreeSpinsScatter
-	// Фриспины за бонус-символы
-	countFreeSpins := s.CountBonusSpin(bonusCount)
-
-	return &model.SpinResult{
-		Board:            board,
-		LineWins:         lineWins,
-		ScatterCount:     bonusCount,
-		AwardedFreeSpins: countFreeSpins,
-		TotalPayout:      total,
-		Balance:          0,
-	}, nil
-}
-
 func (s *serv) GenerateBonusBoard(preset servModel.RTPPreset) [5][3]string {
-
 	var board [5][3]string
 
 	// выбираем 3 случайных барабана

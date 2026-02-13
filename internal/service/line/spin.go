@@ -90,7 +90,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 
 		// КЛЮЧЕВОЙ ВЫЗОВ
 		// Делаем спин (передаём countFreeSpins как параметр)
-		res, err = s.SpinOnce(spinReq, presetCfg)
+		res, err = s.SpinOnce(spinReq.Bet, presetCfg, s.GenerateBoard)
 		if err != nil {
 			return err
 		}
@@ -147,19 +147,19 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 }
 
 // SpinOnce выполняет один спин (возвращает единый SpinResult)
-func (s *serv) SpinOnce(spinReq model.LineSpin, preset servModel.RTPPreset) (*model.SpinResult, error) {
+func (s *serv) SpinOnce(bet int, preset servModel.RTPPreset, generateBoard func(preset servModel.RTPPreset) [5][3]string) (*model.SpinResult, error) {
 	// Генерация игрового поля
-	board := s.GenerateBoard(preset)
+	board := generateBoard(preset)
 
 	// Подсчет символов бонуса "B" на игровом поле
 	bonusCount := s.bonusSymbolCount(board)
 
 	// Выигрыши по линиям
-	lineWins := s.EvaluateLines(board, spinReq.Bet)
+	lineWins := s.EvaluateLines(board, bet)
 	lineTotalPayout := s.TotalPayoutLines(lineWins)
 
 	// Общая выплата за спин
-	total := s.ApplyMaxPayout(lineTotalPayout, spinReq.Bet, maxPayoutMultiplier)
+	total := s.ApplyMaxPayout(lineTotalPayout, bet, maxPayoutMultiplier)
 
 	// Считает сколько дается фриспинов за символы бонуски (если 3 и более) — по таблице FreeSpinsScatter
 	// Фриспины за бонус-символы
