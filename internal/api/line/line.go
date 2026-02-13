@@ -40,16 +40,18 @@ func (h *Handler) Spin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) BuyBonus(w http.ResponseWriter, r *http.Request) {
-	payload, err := req.Decode[dto.BuyBonusRequest](r.Body)
+	payload, err := req.Decode[dto.BonusSpinRequest](r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := h.serv.BuyBonus(r.Context(), payload.Amount); err != nil {
+	result, err := h.serv.BuyBonus(r.Context(), converter.ToBonusSpin(payload))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	response := converter.ToBonusSpinResponse(*result)
 
-	resp.WriteJSONResponse(w, http.StatusOK, map[string]string{"result": "ok"})
+	resp.WriteJSONResponse(w, http.StatusOK, response)
 }
