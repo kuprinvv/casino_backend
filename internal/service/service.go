@@ -7,7 +7,7 @@ import (
 
 type LineService interface {
 	Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinResult, error)
-	BuyBonus(ctx context.Context, amount int) error
+	BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.BonusSpinResult, error)
 }
 
 type CascadeService interface {

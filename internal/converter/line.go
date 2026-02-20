@@ -20,7 +20,24 @@ func ToLineSpinResponse(resp model.SpinResult) line.LineSpinResponse {
 		TotalPayout:      resp.TotalPayout,
 		Balance:          resp.Balance,
 		FreeSpinCount:    resp.FreeSpinCount,
-		InFreeSpin:       resp.InFreeSpin,
+	}
+}
+
+func ToBonusSpin(req line.BonusSpinRequest) model.BonusSpin {
+	return model.BonusSpin{
+		Bet: req.Bet,
+	}
+}
+
+func ToBonusSpinResponse(resp model.BonusSpinResult) line.BonusSpinResponse {
+	return line.BonusSpinResponse{
+		Board:            resp.Board,
+		LineWins:         toLineWins(resp.LineWins),
+		ScatterCount:     resp.ScatterCount,
+		AwardedFreeSpins: resp.AwardedFreeSpins,
+		TotalPayout:      resp.TotalPayout,
+		Balance:          resp.Balance,
+		FreeSpinCount:    resp.FreeSpinCount,
 	}
 }
 
