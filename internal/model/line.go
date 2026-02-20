@@ -12,7 +12,6 @@ type SpinResult struct {
 	TotalPayout      int
 	Balance          int
 	FreeSpinCount    int
-	InFreeSpin       bool
 }
 
 type LineWin struct {
@@ -39,4 +38,10 @@ type BonusSpinResult struct {
 	TotalPayout      int
 	Balance          int
 	FreeSpinCount    int
+}
+
+type WildData struct {
+	Reel       int
+	Row        int
+	Multiplier int
 }

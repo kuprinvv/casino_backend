@@ -19,7 +19,8 @@ CREATE TABLE sessions (
 -- 2. Состояние игры «Line Slots» (обычные 5x3 слоты)
 CREATE TABLE line_game_state (
                                  user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                                 free_spins_count INT NOT NULL DEFAULT 0
+                                 free_spins_count INT NOT NULL DEFAULT 0,
+                                 wild_data INT[][] NOT NULL DEFAULT '{}'::int[][]
 );
 
 -- 3. Состояние игры «Sugar Rush» (cascade-механика с множителями 7x7)

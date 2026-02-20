@@ -53,7 +53,7 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 		// Вычитаем из баланса цену бонуски
 		balance -= bonusPrice
 
-		spinRes, err := s.SpinOnce(bonusReq.Bet, preset, s.GenerateBonusBoard)
+		spinRes, err := s.SpinOnce(ctx, userID, bonusReq.Bet, preset, s.GenerateBonusBoard, s.evaluateLines)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func (s *serv) BuyBonus(ctx context.Context, bonusReq model.BonusSpin) (*model.B
 	return res, err
 }
 
-func (s *serv) GenerateBonusBoard(preset servModel.RTPPreset) [5][3]string {
+func (s *serv) GenerateBonusBoard(preset servModel.RTPPreset, ctx context.Context, userID int) [5][3]string {
 	var board [5][3]string
 
 	// выбираем 3 случайных барабана
