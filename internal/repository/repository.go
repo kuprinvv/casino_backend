@@ -10,6 +10,9 @@ type LineRepository interface {
 	GetFreeSpinCount(ctx context.Context, id int) (int, error)
 	UpdateFreeSpinCount(ctx context.Context, id int, count int) error
 	CreateLineGameState(ctx context.Context, id int) error
+
+	GetWildData(ctx context.Context, id int) ([]model.WildData, error)
+	UpdateWildData(ctx context.Context, id int, data []model.WildData) error
 }
 
 type CascadeRepository interface {
