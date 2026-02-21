@@ -29,13 +29,13 @@ const (
 func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinResult, error) {
 	// Валидация ставки. Если ставка меньше либо равна нулю или не кратна 2-м (т.е. Нечетная) — ошибка
 	if spinReq.Bet <= 0 || spinReq.Bet%2 != 0 {
-		return nil, errors.New("bet must be positive and even")
+		return nil, errors.New("bet must be positive and even") //TODO Вынести в internal\model\errors
 	}
 
 	// Получаем ID пользователя
 	userID, ok := middleware.UserIDFromContext(ctx)
 	if !ok {
-		return nil, errors.New("user id not found in context")
+		return nil, errors.New("user id not found in context") //TODO Вынести в internal\model\errors
 	}
 
 	// Инициализируем структуру для хранения результатов спина
@@ -53,7 +53,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 			err = s.repo.CreateLineGameState(ctx, userID)
 			if err != nil {
 				log.Println(err)
-				return errors.New("failed to get count free spins in Line Repo")
+				return errors.New("failed to get count free spins in Line Repo") //TODO Вынести в internal\model\errors
 			}
 			countFreeSpins = 0
 		}
@@ -61,10 +61,10 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 		// Получаем баланс пользователя один раз
 		userBalance, err := s.userRepo.GetBalance(txCtx, userID)
 		if err != nil {
-			return errors.New("failed to get user balance")
+			return errors.New("failed to get user balance") //TODO Вынести в internal\model\errors
 		}
 		if userBalance < spinReq.Bet {
-			return errors.New("not enough balance")
+			return errors.New("not enough balance") //TODO Вынести в internal\model\errors
 		}
 
 		// Платный спин
@@ -73,7 +73,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 			userBalance -= spinReq.Bet
 			// Списываем деньги с баланса
 			if err := s.userRepo.UpdateBalance(txCtx, userID, userBalance); err != nil {
-				return errors.New("failed to update user balance")
+				return errors.New("failed to update user balance") //TODO Вынести в internal\model\errors
 			}
 			// Получаем пресет весов символов исходя из статистики
 			presetCfg = servModel.RtpPresets[s.lineStatsRepo.CasinoState().PresetIndex]
@@ -88,7 +88,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 		} else { // Иначе режим фриспинов.
 			// Уменьшаем счетчик фриспинов на 1
 			if err := s.repo.UpdateFreeSpinCount(txCtx, userID, countFreeSpins-1); err != nil {
-				return errors.New("failed to update count free spins")
+				return errors.New("failed to update count free spins") //TODO Вынести в internal\model\errors
 			}
 
 			// КЛЮЧЕВОЙ ВЫЗОВ: ФРИСПИН
@@ -102,7 +102,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 		// Начисление выигрыша
 		userBalance += res.TotalPayout
 		if err := s.userRepo.UpdateBalance(txCtx, userID, userBalance); err != nil {
-			return errors.New("failed to update user balance")
+			return errors.New("failed to update user balance") //TODO Вынести в internal\model\errors
 		}
 
 		// Если есть выигранные фриспины, добавляем их
@@ -110,11 +110,11 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 			// Получаем текущее количество фриспинов (после возможного уменьшения)
 			currentFree, err := s.repo.GetFreeSpinCount(txCtx, userID)
 			if err != nil {
-				return errors.New("failed to get count free spins")
+				return errors.New("failed to get count free spins") //TODO Вынести в internal\model\errors
 			}
 			// Прибавляем новые спины
 			if err := s.repo.UpdateFreeSpinCount(txCtx, userID, currentFree+res.AwardedFreeSpins); err != nil {
-				return errors.New("failed to update count free spins")
+				return errors.New("failed to update count free spins") //TODO Вынести в internal\model\errors
 			}
 			// Обновляем то, что увидит клиент
 			res.FreeSpinCount = currentFree + res.AwardedFreeSpins
@@ -123,7 +123,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 		// Получаем финальное количество фриспинов для возврата
 		freeCount, err := s.repo.GetFreeSpinCount(txCtx, userID)
 		if err != nil {
-			return errors.New("failed to get count free spins")
+			return errors.New("failed to get count free spins") //TODO Вынести в internal\model\errors
 		}
 
 		// Устанавливаем финальные значения в res
@@ -148,7 +148,7 @@ func (s *serv) Spin(ctx context.Context, spinReq model.LineSpin) (*model.SpinRes
 // ------- ОБЫЧНЫЙ СПИН -------
 
 // SpinOnce выполняет один спин (возвращает единый SpinResult)
-func (s *serv) SpinOnce(
+func (s *serv) SpinOnce( //TODO убрать возвращения
 	ctx context.Context,
 	userID int,
 	bet int,
@@ -184,7 +184,7 @@ func (s *serv) SpinOnce(
 
 // generateBoard генерирует игровое поле матрицы 5x3
 func (s *serv) generateBoard(preset servModel.RTPPreset, ctx context.Context, userID int) [5][3]string {
-	var board [5][3]string
+	var board [reels][rows]string
 	for r := 0; r < reels; r++ {
 		// Выбор пресета для барабана
 		reelProbs := preset.Probabilities[r]
@@ -193,13 +193,13 @@ func (s *serv) generateBoard(preset servModel.RTPPreset, ctx context.Context, us
 		for i := 0; i < rows; i++ {
 			symbol, _ := getSymbolFromProbs(reelProbs)
 			if (r == 1 || r == 2 || r == 3) && (symbol == "W") {
-				board[r][0], board[r][1], board[r][2] = "W", "W", "W"
+				board[r][0], board[r][1], board[r][2] = "W", "W", "W" //TODO Магические символы
 				break
 			}
-			if f_bonus && symbol == "B" {
+			if f_bonus && symbol == "B" { //TODO Магические символы
 				symbol, _ = getSymbolFromProbs(reelProbs)
 			}
-			if symbol == "B" {
+			if symbol == "B" { //TODO Магические символы
 				f_bonus = true
 			}
 			board[r][i] = symbol
@@ -210,7 +210,7 @@ func (s *serv) generateBoard(preset servModel.RTPPreset, ctx context.Context, us
 }
 
 // Выбор символа на основе вероятностей
-func getSymbolFromProbs(probs map[string]int) (string, error) {
+func getSymbolFromProbs(probs map[string]int) (string, error) { //TODO ЧТО ЗА ХУЙНЯ
 	total := 0
 	for _, prob := range probs {
 		total += prob
@@ -238,7 +238,7 @@ func (s *serv) bonusSymbolCount(board [5][3]string) int {
 	count := 0
 	for r := 0; r < 5; r++ {
 		for c := 0; c < 3; c++ {
-			if board[r][c] == "B" {
+			if board[r][c] == "B" { //TODO Магические символы
 				count++
 			}
 		}
@@ -261,7 +261,7 @@ func (s *serv) evaluateLines(board [5][3]string, bet int) []model.LineWin {
 		// Находим базовый символ (не W и не B) !!!
 		var base string
 		for _, sym := range symbols {
-			if sym != "W" && sym != "B" {
+			if sym != "W" && sym != "B" { //TODO Магические символы
 				base = sym
 				break
 			}
@@ -273,7 +273,7 @@ func (s *serv) evaluateLines(board [5][3]string, bet int) []model.LineWin {
 		// Считаем последовательность base + W с первого барабана
 		count := 0
 		for _, sym := range symbols {
-			if sym == base || sym == "W" {
+			if sym == base || sym == "W" { //TODO Магические символы
 				count++
 			} else {
 				break
@@ -307,7 +307,7 @@ func (s *serv) evaluateLines(board [5][3]string, bet int) []model.LineWin {
 }
 
 // TotalPayoutLines подсчет выплаты за линии
-func (s *serv) TotalPayoutLines(lineWins []model.LineWin) int {
+func (s *serv) TotalPayoutLines(lineWins []model.LineWin) int { //TODO Нахуя это метод а не функция
 	lineTotal := 0
 	for _, w := range lineWins {
 		lineTotal += w.Payout
@@ -316,7 +316,7 @@ func (s *serv) TotalPayoutLines(lineWins []model.LineWin) int {
 }
 
 // applyMaxPayout применяет лимит по максимальному выигрышу
-func (s *serv) applyMaxPayout(amount, bet, maxMult int) int {
+func (s *serv) applyMaxPayout(amount, bet, maxMult int) int { //TODO Нахуя это метод а не функция
 	maxPay := maxMult * bet
 	if amount > maxPay {
 		return maxPay
@@ -325,7 +325,7 @@ func (s *serv) applyMaxPayout(amount, bet, maxMult int) int {
 }
 
 // countBonusSpin считает сколько дается фриспинов за символы бонуски
-func (s *serv) countBonusSpin(bonusCount int) int {
+func (s *serv) countBonusSpin(bonusCount int) int { //TODO Нахуя это метод а не функция
 	awardedFreeSpins := 0
 	if bonusCount >= 3 {
 		if v, ok := servModel.FreeSpinsScatter[bonusCount]; ok {
@@ -338,14 +338,14 @@ func (s *serv) countBonusSpin(bonusCount int) int {
 // ------------- Функции фриспина -------------
 
 func (s *serv) generateBoardWithWilds(preset servModel.RTPPreset, ctx context.Context, userID int) [5][3]string {
-	var board [5][3]string
+	var board [5][3]string //TODO Магические цифры
 
 	wildData, err := s.repo.GetWildData(ctx, userID)
 	if err != nil {
 		return [5][3]string{}
 	}
 	for _, wild := range wildData {
-		board[wild.Reel][wild.Row] = "W" + strconv.Itoa(wild.Multiplier)
+		board[wild.Reel][wild.Row] = "W" + strconv.Itoa(wild.Multiplier) //TODO Магические символы
 	}
 
 	for r := 0; r < reels; r++ {
@@ -361,7 +361,7 @@ func (s *serv) generateBoardWithWilds(preset servModel.RTPPreset, ctx context.Co
 			// Генерация символа для текущей позиции
 			symbol, err := s.getSymbolFromBonusProbs(reelProbs)
 			if err != nil {
-				return [5][3]string{}
+				return [5][3]string{} //TODO Магические цифры
 			}
 
 			// Добавляем символ на игровое поле
@@ -377,7 +377,7 @@ func (s *serv) generateBoardWithWilds(preset servModel.RTPPreset, ctx context.Co
 				})
 				err = s.repo.UpdateWildData(ctx, userID, wildData)
 				if err != nil {
-					return [5][3]string{}
+					return [5][3]string{} //TODO Магические цифры
 				}
 			}
 		}
@@ -387,7 +387,7 @@ func (s *serv) generateBoardWithWilds(preset servModel.RTPPreset, ctx context.Co
 	return board
 }
 
-func (s *serv) getSymbolFromBonusProbs(probs map[string]int) (string, error) {
+func (s *serv) getSymbolFromBonusProbs(probs map[string]int) (string, error) { //TODO Объеденить в одну фунцию
 	total := 0
 	for _, prob := range probs {
 		total += prob
@@ -407,7 +407,7 @@ func (s *serv) getSymbolFromBonusProbs(probs map[string]int) (string, error) {
 		}
 	}
 
-	return "", errors.New("не удалось выбрать символ")
+	return "", errors.New("не удалось выбрать символ") //TODO Вынести в internal\model\errors
 }
 
 func (s *serv) evaluateLinesWithWilds(board [5][3]string, bet int) []model.LineWin {
@@ -435,7 +435,7 @@ func (s *serv) evaluateLinesWithWilds(board [5][3]string, bet int) []model.LineW
 		// Находим базовый символ (не W и не B) !!!
 		var base string
 		for _, sym := range symbols {
-			if !isWild(sym) && sym != "B" {
+			if !isWild(sym) && sym != "B" { //TODO Магические символы
 				base = sym
 				break
 			}
@@ -499,7 +499,7 @@ func (s *serv) evaluateLinesWithWilds(board [5][3]string, bet int) []model.LineW
 
 func isWild(symbol string) bool {
 	switch symbol {
-	case "W2", "W3", "W4", "W5":
+	case "W2", "W3", "W4", "W5": //TODO Магические символы
 		return true
 	default:
 		return false
